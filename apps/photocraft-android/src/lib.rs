@@ -14,6 +14,16 @@
 // only its Android glue (the external-dir fallback and the settings jump) is gated below.
 pub mod browser;
 
+// The system gallery behind the browser's Gallery tab: MediaStore over JNI on the device,
+// with the [`gallery::GallerySource`] seam host tests inject their fake through.
+pub mod gallery;
+
+// The Image API generation transport, the iPad app's `api_gen.rs` twin: it links everywhere
+// (its tests run on the host) and `mod shell` injects it as `Services::comfy_transport`. Public
+// like `browser` — on the host `mod shell` is compiled out and the transport would read as dead
+// code otherwise.
+pub mod api_gen;
+
 #[cfg(target_os = "android")]
 mod platform;
 
@@ -24,6 +34,7 @@ mod shell {
 
     use photocraft_codecs::{ChannelLayout, EncodeOptions, Image};
     use photocraft_doc::Document;
+    use photocraft_ui_egui::long_press::LongPress;
     use photocraft_ui_egui::theme::ThemeKind;
     use photocraft_ui_egui::{FileDialogRequest, FileStamp, PhotocraftApp, Services};
     use winit::platform::android::activity::AndroidApp;
@@ -49,6 +60,8 @@ mod shell {
         let _ = FILES_DIR.set(app.internal_data_path());
         // The handle for the window flag and the settings jump (see `platform`).
         crate::platform::set_app(app.clone());
+        breadcrumb(&format!("external data path: {:?}", crate::platform::external_files_dir()));
+        breadcrumb(&format!("storage granted: {}", crate::browser::storage_granted()));
         // KEEP_SCREEN_ON via set_window_flags wedged input on the API 36 emulator (everything
         // rendered, nothing reached the widgets); revisit with a later android-activity.
         // crate::platform::keep_screen_on();
@@ -164,6 +177,9 @@ mod shell {
         app: PhotocraftApp,
         browser: Arc<Browser>,
         frames: u32,
+        /// Long-press → the synthesized right-click that opens the context menus, the same
+        /// gesture as iPadOS (`photocraft_ui_egui::long_press`).
+        long_press: LongPress,
     }
 
     impl AndroidShell {
@@ -191,7 +207,7 @@ mod shell {
                 app.set_wgpu(rs);
                 app.start_compositor(&cc.egui_ctx);
             }
-            Self { app, browser, frames: 0 }
+            Self { app, browser, frames: 0, long_press: LongPress::default() }
         }
     }
 
@@ -201,6 +217,13 @@ mod shell {
         }
 
         fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+            // A finger held still for half a second is the touch right-click: synthesize it, and
+            // swallow the finger's own events until it lifts so the release cannot click through
+            // the menu that opened — the same gesture as iPadOS (photocraft_ui_egui::long_press).
+            self.long_press.frame(&mut raw_input.events, raw_input.time);
+            if let Some(wait) = self.long_press.fires_within(raw_input.time) {
+                ctx.request_repaint_after(wait);
+            }
             // A tap can reach the app as both a Touch and an emulated pointer press; keep one,
             // or the twin closes the menu the first one opened (#2095). Android's winit backend
             // synthesizes no separate system zoom recognizer (both fingers arrive as Touch
@@ -281,6 +304,15 @@ mod shell {
             })),
             load_prefs: Some(Box::new(read_prefs)),
             save_prefs: Some(Box::new(write_prefs)),
+            // Generation goes straight to the user's OpenAI-compatible Image API
+            // (src/api_gen.rs, the iPad app's backend), not through a ComfyUI server: the
+            // endpoint, model and key are Preferences ▸ Integrations (editable in the
+            // generation panel), and results persist in the app's private files like the
+            // desktop's Generations folder, so the shelf survives a relaunch. The prompt
+            // templates and modes are the shared panel, identical to the desktop.
+            comfy_transport: Some(crate::api_gen::transport()),
+            comfy_image_api: true,
+            comfy_generations_dir: files_dir().map(|dir| dir.join("Generations")),
             ..Default::default()
         }
     }
