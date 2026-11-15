@@ -1218,6 +1218,47 @@ fn dragging_a_tab_off_the_strip_floats_it_in_a_window() {
     }
 }
 
+/// With the touch interface on, the same drag off the strip does nothing: a long-press on a
+/// tab that wobbles a finger's width must not undock the document, and a finger cannot make
+/// the precision drag back onto the strip that re-docks it — re-docking goes through the tab
+/// menu's Consolidate All instead.
+#[test]
+fn a_touch_drag_off_the_strip_never_tears_the_tab_off() {
+    use egui_kittest::kittest::Queryable;
+    for kind in [crate::theme::ThemeKind::Studio, crate::theme::ThemeKind::Pro] {
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+        for name in ["a", "b", "c"] {
+            app.run("file.new", json!({"width": 8, "height": 8, "name": name})).unwrap();
+        }
+        app.session.edit_prefs(|p| p.interface.touch_ui = true);
+        app.sync_views();
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(700.0, 300.0)).build_ui_state(
+            |ui, (app, ready): &mut (PhotocraftApp, bool)| {
+                if *ready {
+                    tabs(app, ui);
+                }
+            },
+            (app, false),
+        );
+        PhotocraftApp::setup_context(&h.ctx, kind);
+        h.state_mut().1 = true;
+        h.run_steps(2);
+        let b = h.get_by_label_contains("b").rect();
+        let target = egui::pos2(b.center().x, b.bottom() + 150.0);
+        h.drag_at(b.center());
+        h.run_steps(1);
+        h.hover_at(target);
+        h.run_steps(1);
+        h.drop_at(target);
+        h.run_steps(2);
+        let app = &h.state().0;
+        let names: Vec<&str> = app.session.documents().iter().map(|d| d.doc.name.as_str()).collect();
+        assert_eq!(names, ["a", "b", "c"], "{kind:?}: the touch drag reordered nothing");
+        assert!(app.ui.windows.is_empty(), "{kind:?}: b stays docked");
+        assert_eq!(app.session.active_index(), Some(2), "{kind:?}: the active document is untouched");
+    }
+}
+
 /// An app with a 64 × 64 white document, a clone source and the Clone Stamp at `size` px.
 fn clone_overlay_app(size: f32) -> PhotocraftApp {
     let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), Default::default());

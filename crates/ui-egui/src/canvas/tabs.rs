@@ -238,7 +238,7 @@ pub(super) fn tabs(app: &mut PhotocraftApp, ui: &mut egui::Ui) -> TabStrip {
             } else if resp.clicked() {
                 activate = Some(doc);
             }
-            match tab_drag(ui, &resp, i, r, row, &placed, &t) {
+            match tab_drag(ui, &resp, i, TabDragSite { r, strip: row, placed: &placed, t: &t, tear_off_allowed: !app.session.prefs().interface.touch_ui }) {
                 Some(TabDrop::Move(to)) => tab_move = Some((doc, move_target_after_filter(&documents, doc, to, document_count))),
                 Some(TabDrop::Float(at)) => tear_off = Some((doc, at)),
                 None => {}
@@ -387,18 +387,35 @@ enum TabDrop {
     Float(Option<[f32; 2]>),
 }
 
+/// Where [`tab_drag`] drags in: the dragged tab's rect, the strip's, the placed tabs, the
+/// theme, and whether an off-strip drag may tear the tab off into its own window.
+struct TabDragSite<'a> {
+    r: Rect,
+    strip: Rect,
+    placed: &'a [(usize, Rect)],
+    t: &'a crate::theme::Tokens,
+    tear_off_allowed: bool,
+}
+
 /// Drag a document tab: along the strip it reorders (a line shows where it will land); off the
 /// strip it tears off into a floating window that can go anywhere, other screens included
-/// (an outline under the pointer shows it). Returns the drop once the drag ends.
-fn tab_drag(ui: &egui::Ui, resp: &egui::Response, i: usize, r: Rect, strip: Rect, placed: &[(usize, Rect)], t: &crate::theme::Tokens) -> Option<TabDrop> {
+/// (an outline under the pointer shows it). Returns the drop once the drag ends. A touch drag
+/// never tears off (`tear_off_allowed` is false there): a long-press on a tab that wobbles a
+/// finger's width must not undock the document, and dragging the outline back onto the strip
+/// to re-dock it is a precision drag a finger does not make — the strip stays reachable
+/// through the tab menu's Consolidate All.
+fn tab_drag(ui: &egui::Ui, resp: &egui::Response, i: usize, site: TabDragSite<'_>) -> Option<TabDrop> {
+    let TabDragSite { r, strip, placed, t, tear_off_allowed } = site;
     if resp.dragged()
         && let Some(p) = resp.interact_pointer_pos()
     {
         if torn_off(strip, p) {
-            let ghost = Rect::from_min_size(p - egui::vec2(40.0, 12.0), egui::vec2(240.0, 160.0));
-            let painter = ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Tooltip, ui.scope_id().with("tab-tear-off")));
-            painter.rect_filled(ghost, t.radius_sm, t.accent.gamma_multiply(0.12));
-            painter.rect_stroke(ghost, t.radius_sm, Stroke::new(1.5, t.accent), egui::StrokeKind::Inside);
+            if tear_off_allowed {
+                let ghost = Rect::from_min_size(p - egui::vec2(40.0, 12.0), egui::vec2(240.0, 160.0));
+                let painter = ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Tooltip, ui.scope_id().with("tab-tear-off")));
+                painter.rect_filled(ghost, t.radius_sm, t.accent.gamma_multiply(0.12));
+                painter.rect_stroke(ghost, t.radius_sm, Stroke::new(1.5, t.accent), egui::StrokeKind::Inside);
+            }
         } else {
             tab_drop_line(ui, placed, p.x, t);
         }
@@ -408,6 +425,9 @@ fn tab_drag(ui: &egui::Ui, resp: &egui::Response, i: usize, r: Rect, strip: Rect
     }
     let p = resp.interact_pointer_pos().or_else(|| ui.input(|i| i.pointer.interact_pos()));
     if let Some(p) = p.filter(|&p| torn_off(strip, p)) {
+        if !tear_off_allowed {
+            return None;
+        }
         // The pointer is in this window's points; the OS wants screen coordinates. Keep the new
         // window's title bar under the pointer, as the ghost showed.
         let at = ui.ctx().input(|i| i.viewport().inner_rect).map(|inner| {
@@ -599,7 +619,7 @@ fn pro_tabs(app: &mut PhotocraftApp, ui: &mut egui::Ui) -> TabStrip {
         } else if resp.clicked() {
             activate = Some(doc);
         }
-        match tab_drag(ui, &resp, i, r, strip, &placed, &t) {
+        match tab_drag(ui, &resp, i, TabDragSite { r, strip, placed: &placed, t: &t, tear_off_allowed: !app.session.prefs().interface.touch_ui }) {
             Some(TabDrop::Move(to)) => tab_move = Some((doc, move_target_after_filter(&documents, doc, to, document_count))),
             Some(TabDrop::Float(at)) => tear_off = Some((doc, at)),
             None => {}
