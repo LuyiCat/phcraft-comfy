@@ -473,3 +473,36 @@ fn unlocked_or_position_locked_smart_objects_take_distortions() {
         }
     }
 }
+
+#[test]
+fn liquify_started_runs_its_deform_as_a_job_and_refuses_a_second_edit_while_it_runs() {
+    // The UI's OK path (`Session::start`) must not freeze the shell on the full-resolution deform:
+    // it becomes a background job, the document is locked while it runs (a second OK is refused,
+    // never queued twice) and the applied result matches the inline run's.
+    let stroke = json!({"tool": "forwardWarp", "size": 30, "points": [[30, 25], [42, 25]]});
+    let mut inline = session(8);
+    let r = inline.execute(LIQUIFY, json!({"strokes": [stroke]})).unwrap();
+    assert_eq!(r["changed"], true);
+    let expected = active_surface(&inline);
+
+    let mut s = session(8);
+    let started = s.start(LIQUIFY, json!({"strokes": [stroke]})).unwrap();
+    let crate::jobs::Started::Job(id) = started else { panic!("Liquify's deform should run as a background job") };
+    let e = s.execute(LIQUIFY, json!({"strokes": [stroke]})).unwrap_err().to_string();
+    assert!(e.contains("still running on this document"), "{e}");
+    let r = s.wait_job(id).unwrap();
+    assert_eq!(r["changed"], true);
+    assert!(r["maxDisplacement"].as_f64().unwrap() > 4.0);
+    assert_eq!(active_surface(&s), expected, "the job applies the same deform as the inline run");
+}
+
+#[test]
+fn liquify_started_on_a_smart_object_runs_its_re_render_as_a_job() {
+    let mut s = session(8);
+    s.execute("layer.smartObjects.convertToSmartObject", json!({})).unwrap();
+    let started = s.start(LIQUIFY, json!({"strokes": [{"tool": "bloat", "size": 30, "points": [[35, 25], [35, 25]]}]})).unwrap();
+    let crate::jobs::Started::Job(id) = started else { panic!("the smart-filter path should run as a background job") };
+    let r = s.wait_job(id).unwrap();
+    assert_eq!(r["changed"], true);
+    assert_eq!(smart(&s).smart_filters.len(), 1, "the filter is recorded");
+}

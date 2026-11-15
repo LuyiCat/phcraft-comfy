@@ -369,3 +369,41 @@ fn the_eraser_end_ends_the_artboard_placing_mode() {
     assert_eq!(app.ui.tool, Tool::Artboard);
     assert!(!app.ui.artboard_tool.adding);
 }
+
+/// A touch contact that begins without a force is a finger; the pencil's always carries one
+/// (calibrated, through winit), and a mouse reports no contacts at all. `finger_down` names the
+/// finger the iOS pen-only Object Selection gate blocks, and it clears when the contact lifts.
+#[test]
+fn finger_down_tracks_forceless_contacts_only() {
+    let t = |id, phase, force| egui::Event::Touch { device_id: egui::TouchDeviceId(1), id: egui::TouchId(id), phase, pos: egui::pos2(1.0, 1.0), force };
+    use egui::TouchPhase::{Cancel, End, Move, Start};
+    let mut s = Stylus::default();
+    assert!(!s.finger_down(), "a mouse reports no contacts");
+    s.update(&[t(1, Start, Some(0.4))]);
+    assert!(!s.finger_down(), "a pencil contact carries a force");
+    s.update(&[t(2, Start, None)]);
+    assert!(s.finger_down(), "a finger began without one");
+    s.update(&[t(2, Move, None)]);
+    assert!(s.finger_down(), "still down");
+    s.update(&[t(2, End, None)]);
+    assert!(!s.finger_down(), "the finger lifted");
+    // Cancelled contacts clear too, and the pen sample mapping (which lends known pens a 0
+    // pressure) never turns a finger into a pen.
+    s.update(&[t(3, Start, None), t(3, Cancel, None)]);
+    assert!(!s.finger_down());
+}
+
+/// The iOS Object Selection gate: only that tool, only a finger, only on iOS.
+#[test]
+fn finger_blocks_object_selection_only_on_ios() {
+    use crate::state::Tool;
+    for (ios, tool, finger, blocked) in [
+        (true, Tool::ObjectSelection, true, true),
+        (true, Tool::ObjectSelection, false, false),
+        (true, Tool::RectMarquee, true, false),
+        (true, Tool::Brush, true, false),
+        (false, Tool::ObjectSelection, true, false),
+    ] {
+        assert_eq!(finger_blocks_object_selection(ios, tool, finger), blocked, "{tool:?} ios={ios} finger={finger}");
+    }
+}

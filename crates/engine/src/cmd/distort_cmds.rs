@@ -274,31 +274,49 @@ fn liquify(s: &mut Session, p: &Value) -> Result<Value> {
     if strokes.is_empty() {
         return Ok(json!({"layer": id.0, "changed": false}));
     }
-    let t0 = Stopwatch::start();
-    let field = LiquifyField::from_strokes(canvas, cell, &strokes);
     let smart = matches!(s.active().and_then(|d| d.doc.layer(id)).map(|l| &l.content), Some(LayerContent::Smart(_)));
+    let field = LiquifyField::from_strokes(canvas, cell, &strokes);
     if field.is_identity() && !smart {
         return Ok(json!({"layer": id.0, "changed": false}));
     }
-    let r = run_on_layer(
+    // The full-resolution deform is the command's heavy part, so it runs as a background job when
+    // started with `Session::start` (#210): the shell keeps drawing and shows the queue instead of
+    // freezing for the seconds a big layer takes on a phone, the document is locked meanwhile (a
+    // second OK is refused, not queued twice), and Esc cancels before the deform starts.
+    // `execute` (tests, the CLI) runs inline, as before. The smart-object path records the filter
+    // and re-renders in the same job, as the other filters do.
+    let mut params = p.clone();
+    if let Value::Object(m) = &mut params {
+        m.remove("layer");
+    }
+    let max_displacement = field.max_displacement();
+    crate::jobs::edit_job(
         s,
-        LIQUIFY,
         "Liquify",
-        p,
-        false,
-        &|surf, sel, _| {
-            let out = apply_liquify(surf, &field);
-            Ok(match sel {
+        move |doc, _, ctx| {
+            ctx.check()?;
+            let t0 = Stopwatch::start();
+            let selection = doc.selection.clone();
+            let group = crate::transform_cmds::group_locks(doc, id);
+            let l = doc.layer_mut(id).ok_or(EngineError::NoLayer(id))?;
+            if let LayerContent::Smart(_) = l.content {
+                check_locks(l, group, false)?;
+                let sf = SmartFilter { command: LIQUIFY.to_string(), params, blend: photocraft_color::BlendMode::Normal, opacity: 1.0, visible: true };
+                return crate::smart_cmds::add_smart_filter_in(doc, id, sf, selection.as_ref(), ctx).map(|()| (t0.ms(), max_displacement));
+            }
+            check_locks(l, group, false)?;
+            let LayerContent::Raster(surf) = &mut l.content else {
+                return Err(EngineError::Other("Liquify needs a pixel layer (rasterize it first)".into()));
+            };
+            let out = ctx.stage(0.1, 1.0, "Liquify", |_| apply_liquify(surf, &field));
+            *surf = match selection.as_ref() {
                 Some(sel) => mix_by_selection(surf, &out, sel),
                 None => out,
-            })
+            };
+            Ok((t0.ms(), max_displacement))
         },
-        None,
-    )?;
-    let mut r = r;
-    r["ms"] = json!(t0.ms());
-    r["maxDisplacement"] = json!(field.max_displacement());
-    Ok(r)
+        move |(ms, max_displacement)| json!({"layer": id.0, "changed": true, "ms": ms, "maxDisplacement": max_displacement}),
+    )
 }
 
 /// Lifts the selected pixels (when there is a selection), deforms them with `f` and puts them

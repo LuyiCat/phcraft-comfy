@@ -841,6 +841,12 @@ fn handle_primary_canvas_input(app: &mut PhotocraftApp, ui: &mut egui::Ui, view:
     // (Preferences › Tools, `paint_mouse`).
     crate::paint_mouse::sync_tool_brush(app);
     let mut buttons = crate::paint_mouse::canvas_buttons(app, response, tool);
+    // iOS: Object Selection is pen-only — a finger's touch (a contact without a force; the
+    // pencil's always carries one) never starts or commits a selection. Fingers keep the mode
+    // HUD, the canvas menus and the two-finger pan; every other platform is unaffected.
+    if crate::stylus::finger_blocks_object_selection(cfg!(target_os = "ios"), tool, app.stylus.finger_down()) {
+        buttons = crate::paint_mouse::Buttons::default();
+    }
     // The Crop tool's frame is edited from the press (before egui's drag threshold), so the
     // pixels past the canvas show at once, as in Photoshop.
     if tool == Tool::Crop && response.is_pointer_button_down_on() && ui.input(|i| i.pointer.primary_down()) && crate::crop_ui::press(app) {

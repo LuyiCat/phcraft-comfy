@@ -405,22 +405,17 @@ pub fn content_aware_move_params(app: &PhotocraftApp, offset: [i64; 2]) -> Value
 
 /// Object Selection: the dragged rectangle. A click (or a sub-2 px nudge) cannot be a
 /// rectangle: with Object Finder on it selects the object under the pointer, the one hovering
-/// highlighted (#4087; ⇧ adds, ⌥ subtracts, ⇧⌥ intersects, otherwise replaces). With it off it
-/// falls back to a Quick Selection dab at
-/// the brush size instead of looking dead (⌥ subtracts, otherwise it adds). Larger drags
-/// run the rectangle GrabCut (⌥ subtracts, ⇧ adds, otherwise replaces).
+/// highlighted (#4087). With it off it falls back to a Quick Selection dab at the brush size
+/// instead of looking dead. Larger drags run the rectangle GrabCut. The mode is the effective
+/// selection mode (`document_selection_mode`): the options bar's (or the touch HUD's) New /
+/// Add / Subtract choice, overridden by ⇧ add, ⌥ subtract, ⇧⌥ intersect held at the press.
 pub fn finish_object_selection(app: &mut PhotocraftApp, start: [f64; 2], end: [f64; 2], mods: egui::Modifiers) {
     let (x, y) = (start[0].min(end[0]), start[1].min(end[1]));
     let (w, h) = ((end[0] - start[0]).abs(), (end[1] - start[1]).abs());
     let sample_all = app.ui.tool_options.sample_all.object_selection;
+    let mode = crate::tool_feedback::document_selection_mode(app, Tool::ObjectSelection, mods);
     if (w < 2.0 || h < 2.0) && app.ui.tool_options.object_finder {
         // Object Finder (#4087): the object under the click, as hovering highlighted it.
-        let mode = match (mods.shift, mods.alt) {
-            (true, true) => "intersect",
-            (true, false) => "add",
-            (false, true) => "subtract",
-            (false, false) => "replace",
-        };
         let r = app.run("select.object", json!({"point": [end[0], end[1]], "mode": mode, "sampleAllLayers": sample_all}));
         crate::object_finder::clear(app);
         report_smart_result(app, r, tl!("No object found there — drag a rectangle around it"));
@@ -428,18 +423,12 @@ pub fn finish_object_selection(app: &mut PhotocraftApp, start: [f64; 2], end: [f
     }
     if w < 2.0 || h < 2.0 {
         let size = app.session.tools.brush.size;
-        let mode = if mods.alt { "subtract" } else { "add" };
+        // A click-sized dab has nothing to replace: it adds (⌥, or the bar's Subtract, takes away).
+        let mode = if mode == "subtract" { "subtract" } else { "add" };
         let r = app.run("select.quick", json!({"points": [[end[0], end[1]]], "size": size, "mode": mode, "sampleAllLayers": sample_all}));
         report_smart_result(app, r, tl!("Quick Selection found nothing there"));
         return;
     }
-    let mode = if mods.alt {
-        "subtract"
-    } else if mods.shift {
-        "add"
-    } else {
-        "replace"
-    };
     let r = app.run("select.object", json!({"rect": [x.round(), y.round(), w.round(), h.round()], "mode": mode, "sampleAllLayers": sample_all}));
     report_smart_result(app, r, tl!("Object Selection found nothing there — try a tighter rectangle"));
 }
@@ -509,6 +498,12 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui, tool: Tool) -> bo
         return false;
     }
     let composite = crate::canvas::paint_target(app).as_str() == Some("pixels");
+    // Object Selection's bar draws the mode buttons (which need the whole app), so it runs
+    // before the per-tool `o` borrow below.
+    if tool == Tool::ObjectSelection {
+        object_selection_options(app, ui);
+        return true;
+    }
     let o = &mut app.ui.tool_options;
     match tool {
         Tool::SpotHealing => {
@@ -722,16 +717,6 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui, tool: Tool) -> bo
                 report_smart_result(app, r, tl!("No subject found — try Object Selection or the Lasso"));
             }
         }
-        Tool::ObjectSelection => {
-            crate::widgets::checkbox(ui, &mut o.object_finder, tl!("Object Finder"));
-            crate::widgets::checkbox(ui, &mut o.sample_all.object_selection, tl!("Sample All Layers"));
-            opt(ui, tl!("Drag a rectangle around the object"));
-            crate::widgets::vline(ui, 22.0);
-            if crate::widgets::secondary_button(ui, tl!("Select Subject"), 0.0).clicked() {
-                let r = app.run("select.subject", json!({}));
-                report_smart_result(app, r, tl!("No subject found — try a rectangle around the object"));
-            }
-        }
         Tool::RedEye => {
             opt(ui, tl!("Pupil Size"));
             crate::widgets::value_field(ui, &mut o.red_eye_pupil_size, 1.0..=100.0, "", 50.0);
@@ -743,6 +728,24 @@ pub fn options_bar(app: &mut PhotocraftApp, ui: &mut egui::Ui, tool: Tool) -> bo
         _ => {}
     }
     true
+}
+
+/// The Object Selection tool's options bar. Drawn before the shared `o` borrow in
+/// [`options_bar`]: the mode buttons take the whole app. Photoshop's Object Selection bar
+/// carries the same New / Add / Subtract / Intersect buttons the marquee tools have, so
+/// combining regions needs no keyboard (a touch screen has none).
+fn object_selection_options(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
+    crate::panels::selection_mode_buttons(app, ui);
+    crate::widgets::vline(ui, 22.0);
+    let o = &mut app.ui.tool_options;
+    crate::widgets::checkbox(ui, &mut o.object_finder, tl!("Object Finder"));
+    crate::widgets::checkbox(ui, &mut o.sample_all.object_selection, tl!("Sample All Layers"));
+    opt(ui, tl!("Drag a rectangle around the object"));
+    crate::widgets::vline(ui, 22.0);
+    if crate::widgets::secondary_button(ui, tl!("Select Subject"), 0.0).clicked() {
+        let r = app.run("select.subject", json!({}));
+        report_smart_result(app, r, tl!("No subject found — try a rectangle around the object"));
+    }
 }
 
 fn pattern_stamp_options(app: &mut PhotocraftApp, ui: &mut egui::Ui) {

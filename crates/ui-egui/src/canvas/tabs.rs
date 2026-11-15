@@ -15,6 +15,8 @@ pub fn document_area(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     crate::paint_mouse::show_picker(app, ui.ctx());
     // And the Shift+Alt+right-click HUD Color Picker (#6098), while its gesture is held.
     crate::color_hud::show(app, ui.ctx());
+    // The Touch Interface's selection-mode switch, while a selection tool is active.
+    crate::panels::selection_hud::show(app, ui.ctx());
     crate::brush_mode_menu::show(app, ui.ctx());
 }
 

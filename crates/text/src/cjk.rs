@@ -433,6 +433,12 @@ pub fn font_files(script: CjkScript) -> Vec<FontFile> {
             f("/system/fonts/NotoSansCJK-VF.ttc", "Noto Sans CJK"),
             f("/system/fonts/NotoSansCJK-Regular.ttc", "Noto Sans CJK"),
         ]
+    } else if cfg!(target_os = "ios") {
+        // iPadOS exposes no system font files an app sandbox may read. The script fallback
+        // comes from the embedded craft-fonts faces instead (built with CRAFT_FONTS_DIR; see
+        // apps/photocraft-ios/ios/build.sh), which arrive before these paths are ever asked for.
+        let _ = script;
+        Vec::new()
     } else if cfg!(target_os = "windows") {
         let dir = std::env::var("WINDIR").unwrap_or_else(|_| "C:\\Windows".into());
         let w = |file: &str, family: &'static str| FontFile { path: std::path::Path::new(&dir).join("Fonts").join(file), family: family.to_string() };
@@ -531,6 +537,10 @@ pub fn last_resort_files() -> Vec<FontFile> {
             f("/system/fonts/DroidSansFallbackFull.ttf"),
             f("/system/fonts/DroidSansFallback.ttf"),
         ]
+    } else if cfg!(target_os = "ios") {
+        // No readable system font files in an app sandbox; the embedded craft-fonts faces cover
+        // the scripts instead (see `font_files`).
+        Vec::new()
     } else if cfg!(target_os = "windows") {
         let dir = std::env::var("WINDIR").unwrap_or_else(|_| "C:\\Windows".into());
         vec![FontFile { path: std::path::Path::new(&dir).join("Fonts").join("ARIALUNI.TTF"), family: String::new() }]

@@ -34,6 +34,13 @@ use crate::{ControlResponse, ExportSettings, PhotocraftApp, SaveFileFn, notices}
 /// Delay before the modal progress dialog appears (quick jobs finish without it).
 pub const DIALOG_DELAY_MS: f64 = 250.0;
 
+/// The dialog's delay for `touch`: zero on the Touch Interface — its devices run the slowest
+/// CPUs the app targets, so a job is never "quick" there, and the desktop's grace left a tap
+/// looking dead on a phone — and the desktop's [`DIALOG_DELAY_MS`] otherwise.
+fn dialog_delay(touch: bool) -> f64 {
+    if touch { 0.0 } else { DIALOG_DELAY_MS }
+}
+
 /// A file opening in the background: shown as a document tab with progress.
 #[derive(Clone, Debug)]
 pub struct OpenTab {
@@ -908,8 +915,9 @@ pub(crate) fn batch_preview(app: &mut PhotocraftApp, ui: &mut egui::Ui) -> bool 
 }
 
 /// The modal progress window for a job locking the active document (Photoshop shows one for
-/// long filters): title, status, bar, percentage and elapsed time, Cancel. Appears after
-/// [`DIALOG_DELAY_MS`]; Esc cancels (see [`tick`]). A save shows it only when it runs in the
+/// long filters): title, status, bar, percentage and elapsed time, Cancel. On the pointer-first
+/// desktop it appears after [`DIALOG_DELAY_MS`], so quick jobs finish without it; the Touch
+/// Interface shows it at once. Esc cancels (see [`tick`]). A save shows it only when it runs in the
 /// foreground (Save in Background off), and then at once, so nothing can be clicked meanwhile; a
 /// background save shows its progress in the tab and the status bar instead.
 pub fn dialog(app: &mut PhotocraftApp, ctx: &egui::Context) {
@@ -927,7 +935,10 @@ pub fn dialog(app: &mut PhotocraftApp, ctx: &egui::Context) {
                 &j.command,
                 !app.ui.view.hides_chrome() && app.ui.panels.status_bar && job_in_view(app).is_some_and(|shown| shown.id == j.id),
             );
-            if j.command == "file.automate.batch" || j.elapsed_ms < DIALOG_DELAY_MS || place || app.jobs.saves.iter().any(|s| s.job == j.id) {
+            // The Touch Interface shows it at once: its devices run the slowest CPUs the app
+            // targets, so a job is never "quick" there, and the desktop's grace delay left a tap
+            // looking dead for a quarter second on a phone.
+            if j.command == "file.automate.batch" || j.elapsed_ms < dialog_delay(crate::touch::on(app)) || place || app.jobs.saves.iter().any(|s| s.job == j.id) {
                 return;
             }
             j

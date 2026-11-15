@@ -459,6 +459,10 @@ pub struct Services {
     pub check_updates: Option<photocraft_engine::updates_cmds::CheckFn>,
     /// Blocking HTTP calls to the ComfyUI server for File › Generate Image (desktop; `ai.comfyui.*`).
     pub comfy_transport: Option<photocraft_engine::comfy_cmds::ComfyFn>,
+    /// True when `comfy_transport` speaks the OpenAI-compatible Image API instead of a ComfyUI
+    /// server (the iPad app): the generation panel shows the Image API settings and the "Image
+    /// API Edit" workflow, and Preferences hides the desktop-only fields (and vice versa).
+    pub comfy_image_api: bool,
     /// Where `ai.comfyui.workflows.*` stores imported workflows (the config dir's
     /// `comfy_workflows` folder; desktop only).
     pub comfy_workflows_dir: Option<std::path::PathBuf>,
@@ -475,6 +479,11 @@ pub struct Services {
     /// OS clipboard images: copies go out, screenshots and images from other apps come in.
     pub clipboard_set_image: Option<ClipboardSetFn>,
     pub clipboard_get_image: Option<ClipboardGetFn>,
+    /// The OS *text* clipboard where egui-winit has none (iPadOS, Android: its arboard path is
+    /// compiled out there, leaving an in-app fallback). With a bridge, Paste reads the OS
+    /// pasteboard — text copied in Safari or Notes finally pastes — and the app's own text
+    /// copies are mirrored out. None on desktop and web, which keep egui-winit's clipboard.
+    pub system_clipboard: Option<super::system_clipboard::SystemClipboard>,
     /// SVG text copied by another app: imported only by an explicit pixels/path/shape paste,
     /// and read after an ordinary paste too, only to remember which SVG came with that image.
     pub clipboard_get_svg: Option<ClipboardGetSvgFn>,

@@ -54,6 +54,7 @@ pub mod proxy;
 pub mod render_path;
 pub mod screenshot;
 pub mod state;
+pub mod system_clipboard;
 pub mod texel_guard;
 pub mod theme;
 pub use titlebar::{Caption, CaptionFamily, CaptionIcon, CaptionIcons, CaptionStyle, RenderIconFn};
@@ -764,6 +765,8 @@ impl SyntheticTarget {
 
 #[cfg(test)]
 mod artboard_add_mode_tests;
+
+#[cfg(test)]
 #[cfg(test)]
 mod shape_bounds_box_tests;
 
@@ -830,6 +833,8 @@ mod transform_commit_click_tests;
 
 #[cfg(test)]
 mod layer_props_ui_tests;
+#[cfg(test)]
+mod ios_tap_flow_tests;
 #[cfg(test)]
 mod notice_text_tests;
 #[cfg(test)]

@@ -241,7 +241,7 @@ impl PhotocraftApp {
     fn ui_body(&mut self, ui: &mut egui::Ui) -> bool {
         let ctx = ui.ctx().clone();
         // A text field's right-click menu, before any field is drawn (text_field_menu.rs).
-        text_field_menu::show(&ctx);
+        text_field_menu::show(&ctx, self.services.system_clipboard.as_ref());
         // The wheel goes to a focused value field before the canvas or a panel sees it (#5473).
         field_wheel::begin_frame(&ctx);
         // Each painting tool keeps its own brush (#218), so switch the active tool's brush in
