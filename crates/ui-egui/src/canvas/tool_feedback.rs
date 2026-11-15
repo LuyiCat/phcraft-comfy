@@ -52,6 +52,8 @@ pub fn is_selection_tool(tool: Tool) -> bool {
 
 /// The effective selection mode of `tool` for the options-bar mode `bar` (0 New, 1 Add,
 /// 2 Subtract, 3 Intersect) and the held modifiers: exactly what the tool's gesture will use.
+/// Object Selection reads the same bar mode as the marquee and lasso tools (its options-bar
+/// buttons and the touch HUD write it), so add/subtract works with or without the keys.
 pub fn selection_mode(tool: Tool, bar: u8, m: egui::Modifiers) -> &'static str {
     match tool {
         // Quick Selection always adds (⌥ subtracts), like Photoshop's after the first stroke.
@@ -60,16 +62,6 @@ pub fn selection_mode(tool: Tool, bar: u8, m: egui::Modifiers) -> &'static str {
                 "subtract"
             } else {
                 "add"
-            }
-        }
-        // Object Selection: ⌥ subtracts, ⇧ adds (see `retouch_ui::finish_object_selection`).
-        Tool::ObjectSelection => {
-            if m.alt {
-                "subtract"
-            } else if m.shift {
-                "add"
-            } else {
-                "replace"
             }
         }
         _ => {
@@ -249,11 +241,22 @@ mod tests {
         assert_eq!(badge(&app, Tool::Lasso, shift), Some(Badge::Add));
         app.ui.selection_mode = 3;
         assert_eq!(badge(&app, Tool::RectMarquee, none), Some(Badge::Intersect));
+        app.ui.selection_mode = 0;
         // Smart selection tools.
         assert_eq!(badge(&app, Tool::QuickSelection, none), Some(Badge::Add));
         assert_eq!(badge(&app, Tool::QuickSelection, alt), Some(Badge::Subtract));
         assert_eq!(badge(&app, Tool::ObjectSelection, none), None);
         assert_eq!(badge(&app, Tool::ObjectSelection, shift), Some(Badge::Add));
+        // Object Selection reads the options-bar mode like the marquee and lasso tools, so it can
+        // add or subtract without the keyboard (a touch screen has none); keys still override it.
+        assert_eq!(selection_mode(Tool::ObjectSelection, 1, none), "add");
+        assert_eq!(selection_mode(Tool::ObjectSelection, 2, none), "subtract");
+        assert_eq!(selection_mode(Tool::ObjectSelection, 3, none), "intersect");
+        assert_eq!(selection_mode(Tool::ObjectSelection, 0, none), "replace");
+        assert_eq!(selection_mode(Tool::ObjectSelection, 1, alt), "subtract", "⌥ overrides the bar");
+        app.ui.selection_mode = 2;
+        assert_eq!(badge(&app, Tool::ObjectSelection, none), Some(Badge::Subtract));
+        app.ui.selection_mode = 0;
         // Other tools never show one.
         for t in [Tool::Brush, Tool::Move, Tool::Zoom, Tool::Crop] {
             assert_eq!(badge(&app, t, shift), None);

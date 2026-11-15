@@ -259,8 +259,9 @@ pub(super) fn select_and_mask_button(app: &mut PhotocraftApp, ui: &mut egui::Ui)
     }
 }
 
-/// New / add / subtract / intersect selection buttons (shared by selection tools).
-pub(super) fn selection_mode_buttons(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
+/// New / add / subtract / intersect selection buttons (shared by selection tools; the Object
+/// Selection tool's options bar draws them too, as Photoshop's does).
+pub(crate) fn selection_mode_buttons(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     ui.spacing_mut().item_spacing.x = 2.0;
     for (i, (icon, tip)) in [
         ("square", tl!("New selection").to_string()),

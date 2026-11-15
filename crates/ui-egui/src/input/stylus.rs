@@ -124,6 +124,10 @@ pub struct Stylus {
     touch: Option<f32>,
     /// The touch contacts currently down, so a touch move outside them is a hovering pen.
     contacts: Vec<egui::TouchId>,
+    /// The contacts down that began without a force: a finger. A pen contact carries one
+    /// everywhere this app runs (Apple Pencil reports calibrated force through winit; a desktop
+    /// tablet pen arrives as mouse events and never lands here), so "no force" names the finger.
+    fingers: Vec<egui::TouchId>,
     /// A pen reported through touch events (it hovered, or a contact carried a force): its
     /// contacts without a force are at pressure 0, not a finger's full pressure.
     touch_pen: bool,
@@ -162,6 +166,7 @@ impl Default for Stylus {
             tool_before_eraser: None,
             touch: None,
             contacts: Vec::new(),
+            fingers: Vec::new(),
             touch_pen: false,
             lifted: false,
             frame: Vec::new(),
@@ -213,6 +218,16 @@ impl Stylus {
                                 }
                                 self.contacts.push(*id);
                             }
+                            // Finger or pen: judged from the raw force at the start, before the
+                            // pen-pressure-0 mapping below lends known pens a force.
+                            if force.is_some() {
+                                self.fingers.retain(|c| c != id);
+                            } else if !self.fingers.contains(id) {
+                                if self.fingers.len() >= 16 {
+                                    self.fingers.remove(0);
+                                }
+                                self.fingers.push(*id);
+                            }
                         }
                         let down = start || self.contacts.contains(id);
                         // Only a pen moves without touching, and only a pen (or a force-sensing
@@ -233,6 +248,7 @@ impl Stylus {
                     egui::TouchPhase::End | egui::TouchPhase::Cancel => {
                         self.lifted = true;
                         self.contacts.retain(|c| c != id);
+                        self.fingers.retain(|c| c != id);
                     }
                 }
             }
@@ -270,6 +286,13 @@ impl Stylus {
             Some(c) => PenSample { pressure: c.eval(s.pressure), ..s },
             None => s,
         })
+    }
+
+    /// A finger (not a pen, not a mouse) is touching the screen: a contact is down that began
+    /// without a force, where a pen's contact always carries one (`Stylus::fingers`). False for
+    /// mouse input, which reports no touch contacts at all.
+    pub fn finger_down(&self) -> bool {
+        !self.fingers.is_empty()
     }
 
     /// Preferences › Tools › Pressure Curve (rebuilt only when the points change).
@@ -481,6 +504,14 @@ pub(crate) fn pen_hold_is_no_right_click(ctx: &egui::Context, pen_down: bool) {
     if ctx.options(|o| o.input_options.max_click_duration) != want {
         ctx.options_mut(|o| o.input_options.max_click_duration = want);
     }
+}
+
+/// On iOS the Object Selection tool is pen-only: a finger never starts or commits a selection,
+/// it taps the selection-mode HUD and the menus and pans with two fingers, while the Apple
+/// Pencil — whose contacts carry a force, unlike a finger's — selects as a mouse does. `finger`
+/// is [`Stylus::finger_down`]; every other platform passes `false` and is unaffected.
+pub fn finger_blocks_object_selection(ios: bool, tool: crate::state::Tool, finger: bool) -> bool {
+    ios && finger && tool == crate::state::Tool::ObjectSelection
 }
 
 #[cfg(test)]

@@ -1071,3 +1071,29 @@ fn size_readout_follows_the_ruler_unit() {
     ur.rulers = Unit::Millimeters;
     assert_eq!(crate::canvas::readout_in(&ur, 150.0, [1644.0, 2659.0], [0.0, 0.0, 3425.0, 100.0])[0], "579.97 mm");
 }
+
+/// The options-bar mode buttons — and the touch HUD, which writes the same `selection_mode` —
+/// drive Object Selection with no keyboard at all: Add combines the regions, Subtract cuts from
+/// the selection, New replaces it. The keys only override them.
+#[test]
+fn object_selection_reads_the_persistent_mode_without_modifiers() {
+    for (bar, mode) in [(1u8, "add"), (2, "subtract"), (0, "replace")] {
+        let mut h = harness_with_step_dt(Tool::ObjectSelection, 1.0 / 60.0);
+        h.state_mut().ui.extras.snap = false;
+        // Paint before selecting: an active selection would clip the dab.
+        h.state_mut().run("paint.pencil", json!({"points": [[220, 150]], "size": 60, "color": "#ff0000"})).unwrap();
+        h.state_mut().run("select.rect", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+        h.state_mut().ui.selection_mode = bar;
+        press_at(&mut h, 150.0, 100.0, Modifiers::NONE);
+        release_at(&mut h, 290.0, 200.0, Modifiers::NONE);
+        let app = h.state();
+        assert!(!app.ui.status_error, "{}", app.ui.status);
+        let (command, params) = app.session.journal.last().expect("the drag dispatched a command");
+        assert_eq!(command, "select.object");
+        assert_eq!(params["mode"], mode, "the persistent mode, no keys held");
+        let sel = app.session.active().unwrap().doc.selection.as_ref().expect("a selection exists");
+        // Add keeps both; Subtract keeps the rectangle without the disc; New keeps only the disc.
+        assert_eq!(sel.sample_channel(20, 20, 0) > 0.5, mode != "replace", "the earlier rectangle follows the mode");
+        assert_eq!(sel.sample_channel(220, 150, 0) > 0.5, mode != "subtract", "the disc follows the mode");
+    }
+}
