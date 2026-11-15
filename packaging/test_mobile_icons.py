@@ -22,7 +22,7 @@ class MobileIconTests(unittest.TestCase):
         catalog = IOS / "PhotoCraft/Assets.xcassets/AppIcon.appiconset"
         for entry in json.loads((catalog / "Contents.json").read_text())["images"]:
             with self.subTest(icon=entry["filename"]), Image.open(catalog / entry["filename"]) as image:
-                pixels = round(float(entry["size"].split("x")[0]) * float(entry["scale"][:-1]))
+                pixels = round(float(entry["size"].split("x")[0]) * float(entry.get("scale", "1x")[:-1]))
                 self.assertEqual(image.size, (pixels, pixels))
                 self.assertEqual(image.mode, "RGB", "iOS launcher icons must be opaque")
 

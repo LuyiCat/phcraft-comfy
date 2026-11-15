@@ -43,7 +43,7 @@ def main():
     ios = ROOT / "apps/photocraft-ios/ios/PhotoCraft/Assets.xcassets/AppIcon.appiconset"
     entries = json.loads((ios / "Contents.json").read_text())["images"]
     for entry in entries:
-        size = round(float(entry["size"].split("x")[0]) * float(entry["scale"][:-1]))
+        size = round(float(entry["size"].split("x")[0]) * float(entry.get("scale", "1x")[:-1]))
         render(square, size).convert("RGB").save(ios / entry["filename"])
 
     android = ROOT / "apps/photocraft-android/android/res"
