@@ -20,8 +20,12 @@ use crate::canvas::ToolEvent;
 use crate::theme::Tokens;
 use crate::widgets;
 
-/// Longest side of the preview proxy (px).
+/// Longest side of the preview proxy (px) on the pointer-first desktop.
 const PROXY_SIDE: usize = 1600;
+/// Touch devices build a smaller one: the preview area is a fraction of a tablet screen, their
+/// CPUs repaint dabs and build the proxy off it several times slower, and every dab re-renders
+/// only the brush's proxy pixels, so a smaller proxy makes the whole dialog cheaper.
+const TOUCH_PROXY_SIDE: usize = 1024;
 const MAX_VIEW_PREVIEW_PIXELS: usize = 8 * 1024 * 1024;
 const LEFT_W: f32 = 48.0;
 const RIGHT_W: f32 = 292.0;
@@ -610,7 +614,7 @@ fn open_on(
     let st = app.session.active().ok_or("no document")?;
     let canvas = st.doc.bounds();
     let name = st.doc.layer(layer).map(|l| l.name.clone()).unwrap_or_default();
-    let proxy = ProxyImage::new(&surf, canvas, PROXY_SIDE);
+    let proxy = ProxyImage::new(&surf, canvas, proxy_side(app));
     let target = if smart_filter.is_some() { json!("pixels") } else { crate::distort_ui::colour_set_target(app) };
     let colors = photocraft_engine::color_channels::explicit(&json!({"target":target}), surf.format().mode.color_channels()).map_err(|e| e.to_string())?;
     let native_proxy = colors.map(|_| crate::gallery_ui::reduce(&surf, canvas, proxy.scale as u32));
@@ -917,7 +921,13 @@ fn load_backdrop(app: &PhotocraftApp, ctx: &egui::Context, of: Option<u64>, canv
     let mut s = photocraft_raster::Surface::new(photocraft_color::PixelFormat::RGBA8);
     let flat: Vec<f32> = buf.px.iter().flat_map(|p| *p).collect();
     s.write_region(canvas, &flat);
-    Some(ctx.load_texture("liquify-backdrop", crate::distort_ui::surface_image(&s, canvas, PROXY_SIDE), egui::TextureOptions::LINEAR))
+    Some(ctx.load_texture("liquify-backdrop", crate::distort_ui::surface_image(&s, canvas, proxy_side(app)), egui::TextureOptions::LINEAR))
+}
+
+/// The preview proxy's longest side for this app: smaller on the Touch Interface (see
+/// [`TOUCH_PROXY_SIDE`]).
+fn proxy_side(app: &PhotocraftApp) -> usize {
+    if crate::touch::on(app) { TOUCH_PROXY_SIDE } else { PROXY_SIDE }
 }
 
 /// The document [`load_backdrop`] renders for Use `of`.

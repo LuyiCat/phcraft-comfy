@@ -1284,3 +1284,25 @@ fn open_identity_keeps_same_poll_results_in_the_profile_queue() {
     assert!(app.held_opens.is_empty());
     control.assert_untouched(&app);
 }
+
+#[test]
+fn the_touch_interface_skips_the_desktops_dialog_grace_delay() {
+    assert_eq!(super::dialog_delay(false), super::DIALOG_DELAY_MS);
+    assert_eq!(super::dialog_delay(true), 0.0, "a phone's jobs are never quick: show the queue at once");
+}
+
+#[test]
+fn the_touch_interface_shows_the_progress_dialog_at_once() {
+    let mut h = app_harness();
+    h.state_mut().session.edit_prefs(|p| p.interface.touch_ui = true);
+    let gate = Arc::new(AtomicBool::new(false));
+    let job = slow_job(h.state_mut(), &gate);
+    // Within the first frames — well under the desktop's 250 ms grace — the queue is on screen.
+    h.run_steps(2);
+    assert!(h.state().session.job(job).is_some(), "the job still runs");
+    assert!(h.query_by_label("Esc to cancel").is_some(), "the progress dialog is up at once");
+    assert!(h.query_by_label("Cancel").is_some(), "it can be cancelled");
+    h.key_press(egui::Key::Escape);
+    h.run_steps(3);
+    assert!(h.state().session.job(job).is_none(), "Esc cancels it");
+}

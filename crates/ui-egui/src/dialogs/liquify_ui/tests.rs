@@ -1017,3 +1017,11 @@ fn workspaces_open_on_a_smart_object_with_its_filter_mask_targeted() {
     let Some(photocraft_doc::LayerContent::Smart(sm)) = st.doc.layer(layer).map(|l| &l.content) else { panic!("not a smart object") };
     assert_eq!(sm.smart_filters.iter().map(|f| f.command.as_str()).collect::<Vec<_>>(), ["filter.blur.gaussianBlur", photocraft_engine::distort_cmds::LIQUIFY]);
 }
+
+#[test]
+fn the_touch_interface_builds_a_smaller_liquify_proxy() {
+    let mut app = app_with_layer();
+    assert_eq!(proxy_side(&app), PROXY_SIDE, "the pointer-first desktop keeps the full proxy");
+    app.session.edit_prefs(|p| p.interface.touch_ui = true);
+    assert_eq!(proxy_side(&app), TOUCH_PROXY_SIDE, "a tablet's CPU repaints dabs off a smaller proxy");
+}

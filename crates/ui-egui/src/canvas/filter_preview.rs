@@ -4,9 +4,12 @@ use super::{Document, LayerContent, PhotocraftApp};
 
 /// The proxy factor of a live preview of filter `cmd` with `params` on `doc`, the active document:
 /// reduced on a large document (Preferences › Performance › Low Resolution Previews), except for
-/// filters whose features don't scale with a proxy (#2063), and never coarser than the active view,
-/// so at 100 % the preview shows every pixel instead of k-pixel blocks (#6326, as adjustment
-/// previews have since #5764). Zoomed out, the proxy keeps previews of large documents fast.
+/// filters whose features don't scale with a proxy (#2063). On the pointer-first desktop the
+/// factor is never coarser than the active view, so at 100 % the preview shows every pixel instead
+/// of k-pixel blocks (#6326, as adjustment previews have since #5764); zoomed out, the proxy keeps
+/// previews of large documents fast. The web and Touch Interface (iPadOS, Android) keep the
+/// document's proxy at every zoom: a full-resolution preview at 100 % cost seconds per settled
+/// slider change on a phone, where the preview never arrived at all.
 ///
 /// The in-dialog preview window ([`crate::filter_preview_ui`]) sizes its own textures from this
 /// too, so the canvas and the window never disagree about the factor.
@@ -21,7 +24,15 @@ use super::{Document, LayerContent, PhotocraftApp};
 pub(crate) fn filter_preview_factor(app: &PhotocraftApp, doc: &Document, cmd: &str, params: &serde_json::Value) -> u32 {
     // A smart filter edit re-renders the whole stack: every stage constrains the factor.
     let k = crate::filter_dialog::smart_preview_factor(doc, cmd, params, crate::proxy::preview_factor(doc, crate::proxy::reduced_previews(app)));
-    if cfg!(target_arch = "wasm32") { k } else { crate::proxy::view_factor(k, app.current_zoom()) }
+    // Touch devices (iPadOS, Android) preview on the document's proxy at every zoom, as the web
+    // does: their CPUs are the slowest the app runs on, and honouring the view's zoom meant a
+    // full-resolution filter per settled slider change — seconds on a phone, with the preview
+    // never arriving. The preview is drawn at its own factor, so the canvas shows it upscaled.
+    if cfg!(target_arch = "wasm32") || crate::touch::on(app) {
+        k
+    } else {
+        crate::proxy::view_factor(k, app.current_zoom())
+    }
 }
 
 /// Live preview for an open filter dialog: run the filter on the proxy and upload it. With
@@ -309,4 +320,28 @@ pub(super) fn ensure_proxy_preview(app: &mut PhotocraftApp, idx: usize, zoom: f3
         app.proxy_uploaded = Some((doc_id, hash));
     }
     Some((k, key, [proxy.size.width, proxy.size.height]))
+}
+
+#[cfg(test)]
+mod factor_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn the_touch_interface_keeps_the_low_resolution_preview_at_full_zoom() {
+        // #6326 caps the desktop's preview at the view's zoom, so 100 % meant a full-resolution
+        // filter per settled slider change — seconds on a phone, where the preview never arrived.
+        // The Touch Interface keeps the document's proxy at every zoom instead, as the web does.
+        let doc = photocraft_doc::Document::new("big", photocraft_doc::Size::new(6000, 4500), photocraft_color::ColorMode::Rgb, photocraft_color::SampleType::U8);
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+        let cmd = "filter.blur.gaussianBlur";
+        let params = json!({"radius": 8.0});
+        let k = crate::proxy::preview_factor(&doc, true);
+        assert!(k > 1, "a 27 MP document previews reduced: {k}");
+        // Desktop, at the default 100 % view: full resolution, as before.
+        assert_eq!(filter_preview_factor(&app, &doc, cmd, &params), 1);
+        // Touch Interface: the proxy, at 100 % and everywhere else.
+        app.session.edit_prefs(|p| p.interface.touch_ui = true);
+        assert_eq!(filter_preview_factor(&app, &doc, cmd, &params), k);
+    }
 }
