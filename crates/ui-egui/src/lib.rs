@@ -49,7 +49,6 @@ pub mod monitor_status;
 pub mod notices;
 pub mod os_window;
 pub mod panels;
-pub mod place_source;
 pub mod preset_files_ui;
 pub mod proxy;
 pub mod render_path;
@@ -768,7 +767,6 @@ impl SyntheticTarget {
 mod artboard_add_mode_tests;
 
 #[cfg(test)]
-mod place_source_tests;
 #[cfg(test)]
 mod shape_bounds_box_tests;
 

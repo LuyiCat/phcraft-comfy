@@ -3,6 +3,29 @@ use super::{DialogKind, Map, PhotocraftApp, Value, json};
 
 // ---------- dialogs and pickers in front of engine commands ----------
 
+/// The continuation of Place Embedded / Place Linked once the Files picker delivered `bytes`:
+/// refocus the document, place the file, and start Free Transform when the layer lands
+/// synchronously (in the background, `jobs_ui::track_place` starts it when the layer arrives).
+fn place_picked(
+    app: &mut PhotocraftApp,
+    name: &str,
+    bytes: Vec<u8>,
+    linked: bool,
+    doc: crate::DocId,
+    ctx: &egui::Context,
+) -> Result<Value, String> {
+    if app.ui.transform.is_some() {
+        return Err("Commit or cancel the transform first".into());
+    }
+    app.refocus(doc)?;
+    let link = linked.then(|| name.to_string());
+    let result = app.place_bytes(name, bytes, link)?;
+    if result.get("frame").and_then(Value::as_u64).is_none() && !crate::jobs_ui::track_place(app, name, &result) {
+        crate::transform_tool::begin_placed(app, ctx)?;
+    }
+    Ok(result)
+}
+
 /// A generic form dialog that runs `command` with its fields on OK (rendered by [`form_body`]).
 /// File › Open EXR Parts…: pick an EXR, then choose the parts and channel groups that become
 /// the layers of one document (a Maya/Arnold render writes one part per AOV). The dialog is
@@ -356,16 +379,9 @@ pub(super) fn front(app: &mut PhotocraftApp, ctx: &egui::Context, id: &str, para
                 Err(e) => return Some(Err(e)),
             };
             let linked = id == "file.placeLinked";
-            // On a device with a photo album (the iPad shell), ask where to read from — album
-            // or files — before any picker opens (place_source.rs). Elsewhere, straight to Files.
-            if app.services.photo_album.is_some() {
-                app.ui.place_source = Some(crate::place_source::Ask { linked, doc });
-                ctx.request_repaint();
-                return Some(Ok(json!({ "fileDialog": "open" })));
-            }
             let ctx = ctx.clone();
             Some(app.pick_file_bytes(move |app, name, bytes| {
-                crate::place_source::place_picked(app, &name, bytes, linked, doc, &ctx)
+                place_picked(app, &name, bytes, linked, doc, &ctx)
             }))
         }
         "layer.smartObjects.replaceContents" => {

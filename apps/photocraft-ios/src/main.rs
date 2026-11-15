@@ -402,11 +402,6 @@ fn services() -> Services {
         // The OS text clipboard bridge (src/clipboard.rs): paste reads UIPasteboard, so text
         // copied in other apps pastes; copies mirror out through the CopySync plugin.
         system_clipboard: Some(clipboard::bridge()),
-        // The photo album (PHPicker through src/picker.rs): Place asks album-or-files first.
-        photo_album: Some(Box::new(|request, _parent, reply| {
-            let multiple = matches!(request, FileDialogRequest::Open { multiple: true, .. });
-            picker::photos(multiple, reply);
-        })),
         comfy_transport: Some(api_gen::transport()),
         comfy_image_api: true,
         comfy_generations_dir: app_support_dir().map(|dir| dir.join("Generations")),

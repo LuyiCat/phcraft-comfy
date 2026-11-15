@@ -484,10 +484,6 @@ pub struct Services {
     /// pasteboard — text copied in Safari or Notes finally pastes — and the app's own text
     /// copies are mirrored out. None on desktop and web, which keep egui-winit's clipboard.
     pub system_clipboard: Option<super::system_clipboard::SystemClipboard>,
-    /// Present the system photo album picker (the iPad shell's PHPicker): answered like an
-    /// Open dialog with the picked images' names and bytes. Place offers it beside the Files
-    /// picker ("Place From"); `None` (everywhere else) keeps Place going straight to the files.
-    pub photo_album: Option<FileDialogFn>,
     /// SVG text copied by another app: imported only by an explicit pixels/path/shape paste,
     /// and read after an ordinary paste too, only to remember which SVG came with that image.
     pub clipboard_get_svg: Option<ClipboardGetSvgFn>,

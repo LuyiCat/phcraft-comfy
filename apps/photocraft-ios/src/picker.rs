@@ -1,15 +1,14 @@
-//! The Rust half of the system pickers (`ios/PCDocumentPicker.m`): the document picker, the
-//! export sheet and the photo album picker (PHPicker) all answer through the same pending-reply
-//! machinery — only the presenting call differs. The document picker and
-//! its delegate are ObjC (implementing the protocol from Rust needs objc2's unsafe
-//! `declare_class!`), and this module is the safe-looking seam — the C callbacks run on the
-//! main thread (where egui frames also run, never concurrently), copy their bytes across the
-//! ABI, and answer the app's pending `FileDialogReply`. The only unsafe in this crate is the
-//! pointer reads those copies require.
+//! The Rust half of the system pickers (`ios/PCDocumentPicker.m`): the document picker and
+//! the export sheet answer through the same pending-reply machinery — only the presenting
+//! call differs. The document picker and its delegate are ObjC (implementing the protocol
+//! from Rust needs objc2's unsafe `declare_class!`), and this module is the safe-looking
+//! seam — the C callbacks run on the main thread (where egui frames also run, never
+//! concurrently), copy their bytes across the ABI, and answer the app's pending
+//! `FileDialogReply`. The only unsafe in this crate is the pointer reads those copies require.
 //!
 //! The real implementation is iOS-only (the pc_* symbols only link there); on other hosts —
-//! clippy and tests of this bin — the three entry points are no-ops, and a dropped reply
-//! counts as Cancel (`crates/ui-egui/src/file_dialog.rs`).
+//! clippy and tests of this bin — the entry points are no-ops, and a dropped reply counts as
+//! Cancel (`crates/ui-egui/src/file_dialog.rs`).
 
 #[cfg(target_os = "ios")]
 use photocraft_ui_egui::FileDialogReply;
@@ -33,15 +32,8 @@ pub fn export(path: &std::path::Path) {
     real::export(path);
 }
 
-/// The photo album (`Services::photo_album`): present PHPicker; each picked photo's encoded
-/// bytes arrive through the same callback an open does, so the reply carries Contents.
-#[cfg(target_os = "ios")]
-pub fn photos(multiple: bool, reply: FileDialogReply) {
-    real::photos(multiple, reply);
-}
-
 #[cfg(not(target_os = "ios"))]
-pub use stubs::{export, install, open, photos};
+pub use stubs::{export, install, open};
 
 #[cfg(target_os = "ios")]
 mod real {
@@ -55,7 +47,6 @@ mod real {
         // keeps no reference to its arguments past the call.
         safe fn pc_set_callbacks(open: extern "C" fn(*const c_char, *const c_uchar, usize, c_int), cancel: extern "C" fn());
         safe fn pc_pick_open(allow_multiple: c_int);
-        safe fn pc_pick_photos(allow_multiple: c_int);
         safe fn pc_pick_export(path: *const c_char);
     }
 
@@ -85,14 +76,6 @@ mod real {
             return;
         };
         pc_pick_export(path.as_ptr());
-    }
-
-    /// The photo album: the pending-reply slot is shared with the document picker (only one
-    /// dialog is ever pending), and PHPicker delivers through the same open callback.
-    pub fn photos(multiple: bool, reply: FileDialogReply) {
-        *PENDING.lock().unwrap_or_else(PoisonError::into_inner) =
-            Some(Pending { reply: Some(reply), files: Vec::new() });
-        pc_pick_photos(c_int::from(multiple));
     }
 
     extern "C" fn on_open(name: *const c_char, bytes: *const c_uchar, len: usize, last: c_int) {
@@ -146,9 +129,6 @@ mod stubs {
 
     /// No picker off-device: the reply drops unanswered, which the app reads as Cancel.
     pub fn open(_multiple: bool, _reply: FileDialogReply) {}
-
-    /// No album off-device: the reply drops unanswered, which the app reads as Cancel.
-    pub fn photos(_multiple: bool, _reply: FileDialogReply) {}
 
     pub fn export(_path: &std::path::Path) {}
 }
