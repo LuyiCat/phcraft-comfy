@@ -34,7 +34,7 @@ fn main() -> eframe::Result {
     install_locale();
     install_panic_log();
     picker::install();
-    let result = eframe::run_native("PhotoCraft", native_options(), Box::new(|cc| {
+    let result = eframe::run_native("PhotoComfy", native_options(), Box::new(|cc| {
         breadcrumb("app created");
         Ok(Box::new(IosShell::new(cc)))
     }));
@@ -61,7 +61,7 @@ fn breadcrumb(step: &str) {
 /// Info.plist adopts scenes, UIKit persists the scene session in `Library/Saved Application
 /// State` and restores it on the next launch — and the restored scene never attaches winit's
 /// new window: every relaunch rendered blank (egui's viewport stuck at its 10000x10000
-/// default) while a fresh install worked. PhotoCraft has no scene state worth restoring, so
+/// default) while a fresh install worked. PhotoComfy has no scene state worth restoring, so
 /// the saved state is dropped before the UI starts, making every launch the fresh-install
 /// path.
 fn discard_saved_scene_state() {
@@ -77,7 +77,7 @@ fn discard_saved_scene_state() {
 fn install_panic_log() {
     let default = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        let text = format!("PhotoCraft panicked\n{info}\n\n{:?}\n", std::backtrace::Backtrace::force_capture());
+        let text = format!("PhotoComfy panicked\n{info}\n\n{:?}\n", std::backtrace::Backtrace::force_capture());
         log::error!("{text}");
         if let Some(dir) = documents_dir() {
             use std::io::Write as _;
@@ -124,12 +124,12 @@ impl log::Log for StderrLogger {
     fn flush(&self) {}
 }
 
-/// iPad: the window is the screen, so eframe's window geometry options don't apply. PhotoCraft
+/// iPad: the window is the screen, so eframe's window geometry options don't apply. PhotoComfy
 /// owns its fallback fonts (`cjk_fonts`, craft-fonts), so eframe's system-font provider stays
 /// off, as on the desktop; the saved layout (panel positions) lives beside the preferences.
 fn native_options() -> eframe::NativeOptions {
     let mut options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_title("PhotoCraft"),
+        viewport: egui::ViewportBuilder::default().with_title("PhotoComfy"),
         system_font_fallback: false,
         persistence_path: app_support_dir().map(|dir| dir.join("ui.ron")),
         ..Default::default()
@@ -413,8 +413,15 @@ const PREFS_FILE: &str = "preferences.json";
 
 /// The app container's Application Support folder. The iOS sandbox's `HOME` is the container
 /// (the simulator's likewise); created on first use, `None` where storage is unavailable.
+/// The app was born PhotoCraft: its first home (preferences, the Generations folder) moves
+/// here once, so the rename keeps what the user configured.
 fn app_support_dir() -> Option<PathBuf> {
-    let dir = PathBuf::from(std::env::var_os("HOME")?).join("Library/Application Support/PhotoCraft");
+    let base = PathBuf::from(std::env::var_os("HOME")?).join("Library/Application Support");
+    let dir = base.join("PhotoComfy");
+    let old = base.join("PhotoCraft");
+    if !dir.exists() && old.is_dir() && std::fs::rename(&old, &dir).is_err() {
+        std::fs::create_dir_all(&dir).ok()?;
+    }
     std::fs::create_dir_all(&dir).ok()?;
     Some(dir)
 }

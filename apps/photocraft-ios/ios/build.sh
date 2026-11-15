@@ -1,10 +1,10 @@
 #!/bin/sh
-# Builds the Rust binary for PhotoCraft on iPadOS and copies it into the .app bundle.
+# Builds the Rust binary for PhotoComfy on iPadOS and copies it into the .app bundle.
 #
 # Called by the Xcode target's script phase as:
 #   build.sh "$BUILT_PRODUCTS_DIR" "$PRODUCT_NAME" "$PLATFORM_NAME" "$ARCHS"
 # and usable standalone with the same four arguments, e.g. from the repo root:
-#   apps/photocraft-ios/ios/build.sh out PhotoCraft iphonesimulator arm64
+#   apps/photocraft-ios/ios/build.sh out PhotoComfy iphonesimulator arm64
 #
 # The Xcode environment names the SDK (PLATFORM_NAME) and architectures (ARCHS);
 # PROFILE selects the Cargo profile, release by default (debug: PROFILE=debug).
@@ -18,7 +18,7 @@ ARCHS="${4:-arm64}"
 case "$PLATFORM" in
     iphoneos) TARGET="aarch64-apple-ios" ;;
     iphonesimulator)
-        # The simulator runs the host architecture; PhotoCraft builds for arm64 (Apple silicon).
+        # The simulator runs the host architecture; PhotoComfy builds for arm64 (Apple silicon).
         case "$ARCHS" in
             *arm64*) TARGET="aarch64-apple-ios-sim" ;;
             *) TARGET="x86_64-apple-ios" ;;
@@ -101,7 +101,7 @@ if [ ! -f "$APP/Info.plist" ]; then
         -e "s/\$(PRODUCT_BUNDLE_IDENTIFIER)/ai.storyteller.photocraft.ios/" \
         -e "s/\$(MARKETING_VERSION)/0.20.1/" \
         -e "s/\$(CURRENT_PROJECT_VERSION)/1/" \
-        "$(dirname "$0")/PhotoCraft/Info.plist" > "$APP/Info.plist"
+        "$(dirname "$0")/PhotoComfy/Info.plist" > "$APP/Info.plist"
     printf 'APPL????' > "$APP/PkgInfo"
 fi
 echo "installed $(wc -c < "$APP/$PRODUCT" | tr -d ' ') bytes into $APP/$PRODUCT"

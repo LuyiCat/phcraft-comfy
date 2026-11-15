@@ -110,7 +110,7 @@ static void PCSyncViewToWindow(UIWindow *window) {
 // screen) and stuck, because later retries skip already-attached windows.
 //
 // NSLog diagnostics (visible via `xcrun simctl spawn <udid> log show --predicate
-// 'process == "PhotoCraft"'`): window counts at each hook.
+// 'process == "PhotoComfy"'`): window counts at each hook.
 @interface PCSceneDelegate : UIResponder <UIWindowSceneDelegate>
 @end
 

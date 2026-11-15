@@ -1,6 +1,6 @@
 # photocraft-ios
 
-PhotoCraft for iPadOS: the same `ui-egui` shell and engine as the desktop, run by eframe's
+PhotoComfy for iPadOS: the same `ui-egui` shell and engine as the desktop, run by eframe's
 native runner on Metal. A plain Rust `[[bin]]` — winit's iOS backend calls `UIApplicationMain`
 itself from `EventLoop::run_app`, so no Objective-C bootstrap and no exported symbols are
 needed; the binary is the app bundle's `CFBundleExecutable`.
@@ -13,7 +13,7 @@ Interface › Touch Interface (on by default on iPadOS): magnified targets, alwa
 bars, and the safe area respected at the screen edges. Services the OS doesn't provide an iPad
 app (desktop file dialogs, the clipboard bridge, crash recovery) stay unset and the shell
 degrades gracefully, as in the browser; preferences persist in the app container's
-`Application Support/PhotoCraft` directory.
+`Application Support/PhotoComfy` directory.
 
 ## Fonts
 
@@ -30,13 +30,13 @@ tiny ObjC scene delegate comes with Xcode; `build.rs` compiles it via `cc`).
 
 ```sh
 # Simulator (from the repo root; installs into an .app bundle you can `simctl install`):
-apps/photocraft-ios/ios/build.sh out PhotoCraft iphonesimulator arm64
+apps/photocraft-ios/ios/build.sh out PhotoComfy iphonesimulator arm64
 
 # Device:
-PROFILE=release apps/photocraft-ios/ios/build.sh out PhotoCraft iphoneos arm64
+PROFILE=release apps/photocraft-ios/ios/build.sh out PhotoComfy iphoneos arm64
 ```
 
-Or open `ios/PhotoCraft.xcodeproj` in Xcode: the target's script phase runs `ios/build.sh`
+Or open `ios/PhotoComfy.xcodeproj` in Xcode: the target's script phase runs `ios/build.sh`
 (`PROFILE` env selects the Cargo profile; release is the default) and Xcode signs the bundle.
 For a real iPad with a free Apple ID, set the target's Signing & Capabilities team to your
 Personal Team, connect the iPad, and press Run. The free profile expires after 7 days —
@@ -44,8 +44,8 @@ press Run again to re-sign. See `docs/development.md` for the full walkthrough.
 
 ## Sideload to a real iPad with a free Apple ID (no App Store review)
 
-1. Connect the iPad and open `ios/PhotoCraft.xcodeproj` in Xcode.
-2. Select the PhotoCraft target › Signing & Capabilities › check "Automatically manage
+1. Connect the iPad and open `ios/PhotoComfy.xcodeproj` in Xcode.
+2. Select the PhotoComfy target › Signing & Capabilities › check "Automatically manage
    signing" and pick your **Personal Team** (sign in with your free Apple ID under Xcode ›
    Settings › Accounts if prompted).
 3. On the iPad, trust the developer: Settings › General › VPN & Device Management › your
@@ -82,7 +82,7 @@ a pen on the desktop.
   attaching to this ~127 MB binary on a simulator times out and Xcode reports the launch as
   failed while the process comes up moments later (the launch trail in `Documents/launch.log`
   completes and the UI renders). The shared scheme already runs without a debugger attached
-  (`selectedDebuggerIdentifier` empty in `PhotoCraft.xcscheme`), which keeps Run from reporting
+  (`selectedDebuggerIdentifier` empty in `PhotoComfy.xcscheme`), which keeps Run from reporting
   this at all. If you ever see it anyway, switch to the Simulator and look — the app is there.
 - **UIScene adoption (iPadOS 26+/27)**: iOS 27 traps at launch for apps that don't adopt the
   UIScene lifecycle (`EXC_BREAKPOINT` in
@@ -112,4 +112,4 @@ a pen on the desktop.
 - **Anything else**: the build writes a startup trail to `Documents/launch.log`
   (`launched / app created / first frame` — the missing step names where it stopped) and every
   Rust panic with a backtrace to `Documents/crash.log`, both readable over Finder file sharing
-  or Files › On My iPad › PhotoCraft. Send them and the step names the failure.
+  or Files › On My iPad › PhotoComfy. Send them and the step names the failure.
