@@ -77,6 +77,43 @@ fn remove_takes_one_slot_and_clear_empties_the_tray() {
     assert!(h.state().session.layer_tray.is_empty());
 }
 
+/// The rows show what each slot holds: the stashed layer's thumbnail beside its name and source,
+/// drawn as the Layers panel draws that layer. A stashed layer lives in a scratch document no tab
+/// shows, so without the row drawing it nothing would ever thumbnail it.
+#[test]
+fn a_tray_row_draws_the_stashed_layers_thumbnail() {
+    let mut h = harness(1);
+    let stashed = h.state().session.layer_tray[0].doc.layers.last().unwrap().id;
+    let key = (stashed, crate::mask_thumbs_ui::THUMB_LAYER);
+    assert!(!h.state().thumbs.contains_key(&key), "nothing drew the stashed layer before the popup opened");
+    h.get_by_label("Layer Tray").click();
+    h.run_steps(2);
+    h.query_by_label_contains("From Untitled").expect("the slot row's name and source");
+    assert!(h.state().thumbs.contains_key(&key), "the row drew the stashed layer's thumbnail");
+    // It frames the stashed document's canvas (the 16×16 document the layers came from).
+    assert_eq!(h.state().thumb_frames.get(&stashed).copied(), Some(photocraft_geom::Rect::new(0, 0, 16, 16)));
+}
+
+/// A slot holding several layers shows its topmost layer's thumbnail — the layer a placement
+/// leaves active — under the "{n} layers" name.
+#[test]
+fn a_multi_layer_slot_shows_its_topmost_layers_thumbnail() {
+    let mut h = harness(1);
+    h.state_mut().session.execute("layer.new.layer", serde_json::json!({"name": "lower"})).unwrap();
+    h.state_mut().session.execute("layer.new.layer", serde_json::json!({"name": "upper"})).unwrap();
+    h.state_mut().session.execute("select.allLayers", serde_json::json!({})).unwrap();
+    h.state_mut().session.execute("layer.tray.put", serde_json::json!({})).unwrap();
+    h.run_steps(2);
+    let slot = &h.state().session.layer_tray[1].doc;
+    let (bottom, top) = (slot.layers.first().unwrap().id, slot.layers.last().unwrap().id);
+    assert_eq!(slot.layers.last().unwrap().name, "upper", "the slot's topmost layer");
+    h.get_by_label("Layer Tray").click();
+    h.run_steps(2);
+    assert!(h.query_all_by_label_contains("From Untitled").count() >= 2, "both slot rows");
+    assert!(h.state().thumbs.contains_key(&(top, crate::mask_thumbs_ui::THUMB_LAYER)), "the topmost layer's thumbnail");
+    assert!(!h.state().thumbs.contains_key(&(bottom, crate::mask_thumbs_ui::THUMB_LAYER)), "one thumbnail per slot");
+}
+
 /// The Touch Interface harness with one document holding the named layers.
 fn touch_harness(layers: &[&str]) -> Harness<'static, PhotocraftApp> {
     let mut s = photocraft_engine::Session::new();

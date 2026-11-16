@@ -19,8 +19,10 @@ Moving layers to another document works without the desktop's tab drag: the **la
 drag a layer row out and a tray strip appears over the canvas's top edge ("Layer Tray · n");
 release the row on it (or use "Add to Tray" in a layer's long-press menu, or drop the row on
 the tray button in the Layers footer) and the selection is stashed. Switch documents, then
-tap the tray button to place a slot, or drag a slot row out of the popup onto the canvas to
-place its layers centred on that point — converted to the destination's colour and depth.
+tap the tray button: its popup lists the slots, each row showing the stashed layer's thumbnail
+and name over the document it came from, and a tap places a slot — or drag a slot row out of
+the popup onto the canvas to place its layers centred on that point, converted to the
+destination's colour and depth.
 The popup's **Copy | Cut** toggle (a tap; iPadOS has no right-click, so nothing in the tray
 needs one) picks the semantics: Copy keeps the layers in the source document and keeps the
 slot after placing; Cut removes them from the source on stash and empties the slot on place

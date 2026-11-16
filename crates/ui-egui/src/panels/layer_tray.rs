@@ -7,7 +7,8 @@
 //!   ([`drag_strip`], Touch Interface only) — release the row on it to stash.
 //! - The same drop on the footer's tray button ([`footer_button`]) stashes, as Delete and New
 //!   Layer take footer drops.
-//! - The button's popup lists the stashed slots: a click places a slot's layers, ✕ removes it,
+//! - The button's popup lists the stashed slots, each a row with the stashed layer's thumbnail
+//!   and name over the document it came from: a click places a slot's layers, ✕ removes it,
 //!   Clear empties the tray; a slot row dragged out onto the canvas places its layers centred
 //!   on that point. "Add to Tray" in a layer's long-press menu stashes the selection.
 //!
@@ -23,11 +24,26 @@
 
 use super::layer_drag::dropped_on;
 use super::{PhotocraftApp, Tokens, Value, icons, json};
-use egui::{Align2, Color32, CornerRadius, FontId, Rect, Sense, Stroke, StrokeKind, pos2, vec2};
+use egui::{Align2, Color32, CornerRadius, FontId, Rect, Sense, Stroke, StrokeKind, Vec2, pos2, vec2};
 
 /// The drag of a slot row out of the tray popup: the slot's index.
 fn slot_drag_key() -> egui::Id {
     egui::Id::unique("layer-tray-slot-drag")
+}
+
+/// A tray row's height: a 34 px thumbnail and two lines of text inside a finger's tap target.
+const SLOT_ROW_H: f32 = 44.0;
+
+/// The ✕ target that removes a slot, at the row's right end.
+const SLOT_REMOVE: f32 = 26.0;
+
+/// One line of a tray row: `text` in `font`, elided with "…" at `width` so a long layer name
+/// stops before the ✕ instead of widening the popup.
+fn elided(painter: &egui::Painter, text: String, font: FontId, color: Color32, width: f32) -> std::sync::Arc<egui::Galley> {
+    let format = egui::TextFormat { font_id: font, color, ..Default::default() };
+    let mut job = egui::text::LayoutJob::single_section(text, format);
+    job.wrap = egui::text::TextWrapping::truncate_at_width(width.max(1.0));
+    painter.layout_job(job)
 }
 
 /// A slot's ghost label: the stashed layer's name, or "{n} layers".
@@ -106,6 +122,61 @@ pub(super) fn run_place(app: &mut PhotocraftApp, params: Value) {
     }
 }
 
+/// One slot's row in the tray popup: the stashed layers' thumbnail — the topmost layer's, the
+/// one a placement leaves active — the slot's name (or "{n} layers") over the document it came
+/// from, and ✕ to remove the slot. A tap places the slot and a drag off the row places its
+/// layers on the canvas; ✕ takes its own clicks, so a removal never places anything. Returns the
+/// row's response and whether ✕ was clicked.
+fn slot_row(app: &mut PhotocraftApp, ui: &mut egui::Ui, index: usize, enabled: bool) -> (egui::Response, bool) {
+    let ctx = ui.ctx().clone();
+    let t = Tokens::get(&ctx);
+    let (rect, row) = ui.allocate_exact_size(vec2(ui.available_width(), SLOT_ROW_H), Sense::click_and_drag());
+    // The stashed document belongs to no open document, so its thumbnail is drawn here straight
+    // from the slot, the thumbnail caches borrowed apart from the session that holds it.
+    let PhotocraftApp { session, thumbs, thumb_frames, .. } = app;
+    let Some(slot) = session.layer_tray.get(index) else { return (row, false) };
+    let clip = session.prefs().interface.clip_thumbnails_to_layer_bounds;
+    let name = slot_label(slot);
+    let from = if slot.source.is_empty() { String::new() } else { crate::i18n::fmt(tl!("From {doc}"), &[("doc", &slot.source)]) };
+    let label = if from.is_empty() { name.clone() } else { format!("{name}\n{from}") };
+    row.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, label.clone()));
+    // The row's tap-or-drag highlight, as a Layers panel row's.
+    if enabled && row.hovered() {
+        ui.painter().rect_filled(rect, t.radius, t.hover.gamma_multiply(0.5));
+        ui.painter().rect_filled(rect, t.radius, t.accent.gamma_multiply(0.12));
+    }
+    // ✕: remove the slot. Its own target, so the tap that removes does not also place.
+    let remove_rect = Rect::from_center_size(pos2(rect.right() - 4.0 - SLOT_REMOVE / 2.0, rect.center().y), Vec2::splat(SLOT_REMOVE));
+    let remove = ui.interact(remove_rect, ui.scope_id().with(("layer-tray-remove", index)), Sense::click());
+    remove.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, tl!("Remove")));
+    if remove.hovered() {
+        ui.painter().rect_filled(remove_rect, t.radius_sm, t.hover);
+    }
+    icons::paint(ui, remove_rect, "x", 12.0, if remove.hovered() { t.text } else { t.text_dim });
+    // The thumbnail, as the Layers panel draws a layer's: pixels over a checkerboard, a "T" for
+    // type, a folder for a group, and so on.
+    let side = SLOT_ROW_H - 10.0;
+    let thumb = Rect::from_min_size(pos2(rect.left() + 5.0, rect.center().y - side / 2.0), Vec2::splat(side));
+    if let Some(layer) = slot.doc.layers.last() {
+        super::layer_row::paint_layer_thumb(thumbs, thumb_frames, clip, None, &ctx, ui, &slot.doc, layer, thumb, false);
+    }
+    // The name over its source document, elided where the ✕ begins.
+    let left = thumb.right() + 7.0;
+    let width = remove_rect.left() - 8.0 - left;
+    let name_color = if enabled { t.text } else { t.text_dim };
+    let name_galley = elided(ui.painter(), name, crate::theme::medium(12.5), name_color, width);
+    let from_galley = (!from.is_empty()).then(|| elided(ui.painter(), from, FontId::proportional(10.5), t.text_dim, width));
+    let name_h = name_galley.size().y;
+    let gap = 1.0;
+    let total = name_h + from_galley.as_ref().map_or(0.0, |g| g.size().y + gap);
+    let top = rect.center().y - total / 2.0;
+    ui.painter().galley(pos2(left, top), name_galley, name_color);
+    if let Some(galley) = from_galley {
+        ui.painter().galley(pos2(left, top + name_h + gap), galley, t.text_dim);
+    }
+    (row, remove.clicked())
+}
+
 /// The footer button: the tray's popup (with its Copy | Cut mode toggle), its count badge, and
 /// the drop that stashes a dragged layer row (`footer_drag`, as Delete and New Layer take
 /// drops).
@@ -136,7 +207,9 @@ pub(super) fn footer_button(app: &mut PhotocraftApp, ui: &mut egui::Ui, footer_d
     egui::Popup::from_toggle_button_response(&button)
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
         .show(|ui| {
-            ui.set_min_width(230.0);
+            // One fixed width for the popup: every row's thumbnail, name and ✕ line up, and a
+            // long layer name is elided rather than widening the popup past the screen.
+            ui.set_width(250.0);
             ui.horizontal(|ui| {
                 ui.strong(tl!("Layer Tray"));
                 if ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| ui.button(tl!("Clear Tray"))).inner.clicked() {
@@ -153,27 +226,26 @@ pub(super) fn footer_button(app: &mut PhotocraftApp, ui: &mut egui::Ui, footer_d
                 );
                 return;
             }
+            let enabled = app.session.active().is_some();
             // Newest first: what was just stashed is the most likely to be placed.
             for index in (0..app.session.layer_tray.len()).rev() {
-                let slot = &app.session.layer_tray[index];
-                let label = slot_label(slot);
-                let from = if slot.source.is_empty() { String::new() } else { crate::i18n::fmt(tl!("From {doc}"), &[("doc", &slot.source)]) };
-                let row = ui.add_enabled(
-                    app.session.active().is_some(),
-                    egui::Button::new(format!("{label}\n{from}")).wrap_mode(egui::TextWrapMode::Extend).sense(Sense::click_and_drag()),
-                );
+                let (row, remove_clicked) = slot_row(app, ui, index, enabled);
                 // A tap places; the release of a slot drag elsewhere would also read as a click
                 // (egui counts it from the press's widget), so a slot drag suppresses it.
-                if row.clicked() && ctx.data(|d| d.get_temp::<usize>(slot_drag_key())).is_none() {
+                if enabled && !remove_clicked && row.clicked() && ctx.data(|d| d.get_temp::<usize>(slot_drag_key())).is_none() {
                     place = Some(index);
                 }
                 // Or the slot row is dragged out and released over the canvas: the layers land
                 // centred on that point, and the popup stays open for the next slot.
-                if row.drag_started() {
+                if enabled && row.drag_started() {
                     ctx.data_mut(|d| d.insert_temp(slot_drag_key(), index));
                 }
-                if ui.small_button(tl!("Remove")).clicked() {
+                if remove_clicked {
                     remove = Some(index);
+                }
+                if index > 0 {
+                    // Air between slots: every row is its own thumbnail, name and source.
+                    ui.add_space(2.0);
                 }
             }
         });
