@@ -47,6 +47,7 @@ pub mod layer_row_ui;
 pub(super) mod layer_transfer;
 mod layer_tray;
 pub(crate) mod quick_actions;
+pub(crate) mod screen_mode_chip;
 pub mod layer_tree_ui;
 mod layers;
 mod layers_empty_menu;

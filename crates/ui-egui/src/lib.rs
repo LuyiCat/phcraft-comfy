@@ -895,6 +895,9 @@ mod pen_only_painting_tests;
 mod quick_actions_tests;
 
 #[cfg(test)]
+mod screen_mode_chip_tests;
+
+#[cfg(test)]
 mod smart_filter_rows_tests;
 
 #[cfg(test)]
