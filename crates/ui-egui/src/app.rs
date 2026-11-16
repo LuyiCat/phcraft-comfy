@@ -214,6 +214,8 @@ impl PhotocraftApp {
             held_preset_import: None,
             allow_close: false,
             stylus: Default::default(),
+            fingers: Default::default(),
+            pen_only_painting: false,
             control_click: Default::default(),
             background_jobs: false,
             min_frame_ms: None,
