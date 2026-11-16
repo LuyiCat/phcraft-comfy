@@ -18,6 +18,11 @@ pub mod browser;
 // with the [`gallery::GallerySource`] seam host tests inject their fake through.
 pub mod gallery;
 
+// Long-press → context menu, the touch answer to the right-click: the shell injects the
+// synthetic right-click the shared egui UI's menus listen for. Platform-independent (its tests
+// run on the host), the iPadOS shell's twin (`apps/photocraft-ios/src/long_press.rs`).
+pub mod long_press;
+
 // The Image API generation transport, the iPad app's `api_gen.rs` twin: it links everywhere
 // (its tests run on the host) and `mod shell` injects it as `Services::comfy_transport`. Public
 // like `browser` — on the host `mod shell` is compiled out and the transport would read as dead
@@ -34,7 +39,7 @@ mod shell {
 
     use photocraft_codecs::{ChannelLayout, EncodeOptions, Image};
     use photocraft_doc::Document;
-    use photocraft_ui_egui::long_press::LongPress;
+    use crate::long_press::LongPress;
     use photocraft_ui_egui::theme::ThemeKind;
     use photocraft_ui_egui::{FileDialogRequest, FileStamp, PhotocraftApp, Services};
     use winit::platform::android::activity::AndroidApp;
@@ -178,7 +183,7 @@ mod shell {
         browser: Arc<Browser>,
         frames: u32,
         /// Long-press → the synthesized right-click that opens the context menus, the same
-        /// gesture as iPadOS (`photocraft_ui_egui::long_press`).
+        /// gesture as iPadOS (`crate::long_press`).
         long_press: LongPress,
     }
 
@@ -219,7 +224,7 @@ mod shell {
         fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
             // A finger held still for half a second is the touch right-click: synthesize it, and
             // swallow the finger's own events until it lifts so the release cannot click through
-            // the menu that opened — the same gesture as iPadOS (photocraft_ui_egui::long_press).
+            // the menu that opened — the same gesture as iPadOS (crate::long_press).
             self.long_press.frame(&mut raw_input.events, raw_input.time);
             if let Some(wait) = self.long_press.fires_within(raw_input.time) {
                 ctx.request_repaint_after(wait);
