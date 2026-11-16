@@ -1,6 +1,6 @@
 # photocraft-android (PhotoComfy)
 
-PhotoCraft for Android, distributed as **PhotoComfy**: the same `ui-egui` shell and engine as the
+PhotoComfy for Android: the same `ui-egui` shell and engine as the
 desktop, run by eframe's native runner on wgpu (Vulkan, with GLES where the adapter says so).
 The APK carries **no Java code** (`hasCode="false"`): the manifest names the system
 `android.app.NativeActivity`, which loads `libphotocraft_android.so`; android-activity brings up
@@ -86,14 +86,14 @@ rustup target add aarch64-linux-android
 cargo install cargo-ndk --locked
 
 # Android SDK pieces (accept the licenses when asked), then from the repo root:
-apps/photocraft-android/android/build.sh out
+apps/photocraft-android/android/build.sh out/android
 ```
 
 `build.sh` needs `ANDROID_HOME` (or the default `~/Library/Android/sdk`) with: cmdline-tools,
 one NDK (`sdkmanager ndk`), `build-tools` (aapt2/zipalign/apksigner) and a `platforms;android-*`
 package. It cross-compiles through `cargo ndk` (aapt2 needs no Gradle), assembles and signs the
 APK — generating a local keystore on first run (storepass/keypass `android`) — and writes
-`out/PhotoComfy.apk` for `arm64-v8a` (every modern phone and tablet; the Apple-silicon emulator
+`out/android/PhotoComfy.apk` for `arm64-v8a` (every modern phone and tablet; the Apple-silicon emulator
 runs the same ABI). `PROFILE=debug` selects the Cargo profile. The sibling `../craft-fonts`
 checkout is picked up exactly like an iPadOS build: without it the build works, but CJK and other
 non-Latin interface text shows missing glyphs unless the device's Noto files are readable.
@@ -106,7 +106,7 @@ Regenerate platform exports with `python3 packaging/mobile-icons.py`.
 ## Install and share
 
 ```sh
-adb install -r out/PhotoComfy.apk            # over USB/wireless debugging
+adb install -r out/android/PhotoComfy.apk   # over USB/wireless debugging
 adb shell am start -n com.photocomfy.app/android.app.NativeActivity
 ```
 
@@ -145,7 +145,7 @@ The arm64-v8a system images run natively on M-series Macs:
 sdkmanager "system-images;android-36;google_apis;arm64-v8a"   # once
 avdmanager create avd -n photocomfy -k "system-images;android-36;google_apis;arm64-v8a"
 emulator -avd photocomfy -no-window -no-audio &               # or with a window
-adb install -r out/PhotoComfy.apk
+adb install -r out/android/PhotoComfy.apk
 adb shell am start -n com.photocomfy.app/android.app.NativeActivity
 adb exec-out screencap -p > shot.png
 ```
