@@ -14,8 +14,13 @@ tool down, as on iPadOS. The Touch Interface preference (`crates/engine/src/pref
 `default_touch_ui`) is on by default on Android: magnified targets, always-visible scroll bars.
 Android, unlike iPadOS, reports no safe-area insets to egui (winit has no support yet), so the
 activity runs fullscreen and the UI owns the whole screen. Preferences persist in the app's
-private `files` directory; clipboard bridge and crash recovery stay unset and the shell
-degrades gracefully, as in the browser and on iPadOS.
+private `files` directory. The system clipboard is bridged through the activity's
+`ClipboardManager` (`src/clipboard.rs`): long-press a text field for its edit menu and Paste
+reads whatever another app copied — the Generate panel's Image API key included — and the
+app's own copies reach other apps; Android 10+ only shows the clipboard to the focused app,
+which PhotoComfy is while the menu is open. The layer tray works as on iPadOS (drag a layer row
+out for the tray strip, or Add to Tray in its long-press menu; switch documents, then place).
+Crash recovery stays unset and the shell degrades gracefully, as in the browser.
 
 ## Opening and saving files
 
@@ -68,8 +73,9 @@ desktop — the prompt templates (生图 · 扩图, 大气透视), the send mode
 selection crop), the result placement and the shelf — with one difference: there is no local
 ComfyUI server to talk to, so generation goes straight to an OpenAI-compatible Image API
 (`src/api_gen.rs`, the iPad app's backend). Set the endpoint, model and key once in Preferences ▸
-Integrations (or right in the panel; the Check button asks the endpoint for its model list);
-results persist in the app's private `files/Generations`, so the shelf survives a relaunch.
+Integrations (or right in the panel; the Check button asks the endpoint for its model list), and
+long-press a field to paste the key from another app; results persist in the app's private
+`files/Generations`, so the shelf survives a relaunch.
 
 ## Build
 

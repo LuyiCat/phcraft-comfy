@@ -1,9 +1,10 @@
 //! The Android shell, distributed as **PhotoComfy**: the same ui-egui app on wgpu (Vulkan, with
 //! GLES as the fallback). winit's Android backend delivers touches as egui input, so the canvas
 //! and tools work unchanged; platform services the OS doesn't give a plain NativeActivity app
-//! (desktop file dialogs, the clipboard bridge, crash recovery) stay unset and the shell
-//! degrades gracefully, as in the browser and on iPadOS. Everything mirrors
-//! `apps/photocraft-ios/src/main.rs`.
+//! (desktop file dialogs, crash recovery) stay unset and the shell degrades gracefully, as in
+//! the browser. The system clipboard comes from the activity's `ClipboardManager`
+//! (`clipboard.rs`), so the Image API's fields paste from other apps as they do on iPadOS.
+//! Everything mirrors `apps/photocraft-ios/src/main.rs`.
 //!
 //! The APK carries no Java code (`hasCode="false"`): its `android.app.NativeActivity` loads
 //! `libphotocraft_android.so`, android-activity brings up the JVM thread and calls
@@ -17,6 +18,10 @@ pub mod browser;
 // The system gallery behind the browser's Gallery tab: MediaStore over JNI on the device,
 // with the [`gallery::GallerySource`] seam host tests inject their fake through.
 pub mod gallery;
+
+// The system clipboard bridge (`crates/ui-egui/src/system_clipboard.rs`): the activity's
+// ClipboardManager over JNI on the device, an empty stub on the host (where its test runs).
+pub mod clipboard;
 
 // Long-press → context menu, the touch answer to the right-click: the shell injects the
 // synthetic right-click the shared egui UI's menus listen for. Platform-independent (its tests
@@ -190,6 +195,9 @@ mod shell {
     impl AndroidShell {
         fn new(cc: &eframe::CreationContext<'_>, browser: Arc<Browser>) -> Self {
             PhotocraftApp::setup_context(&cc.egui_ctx, ThemeKind::Pro);
+            // The copy side of the OS clipboard bridge (src/clipboard.rs): the app's text copies
+            // reach the system clipboard, which egui-winit cannot do on Android.
+            cc.egui_ctx.add_plugin(photocraft_ui_egui::system_clipboard::CopySync::new(crate::clipboard::bridge()));
             let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), services(browser.clone()));
             // Testing aid (a launcher sets no CLI args for an Android app): open a document at
             // start, to reproduce the canvas states a reviewer sees.
@@ -318,6 +326,10 @@ mod shell {
             comfy_transport: Some(crate::api_gen::transport()),
             comfy_image_api: true,
             comfy_generations_dir: files_dir().map(|dir| dir.join("Generations")),
+            // The OS text clipboard bridge (src/clipboard.rs): Paste reads the ClipboardManager,
+            // so text copied in another app (the Image API's key, say) pastes; copies mirror out
+            // through the CopySync plugin.
+            system_clipboard: Some(crate::clipboard::bridge()),
             ..Default::default()
         }
     }

@@ -392,6 +392,99 @@ pub fn open_all_files_settings() -> Result<(), String> {
     })
 }
 
+/// The system clipboard's text, read through the activity's `ClipboardManager`: `None` when it
+/// holds no text (or the system withholds the read — Android 10+ only shows the focused app the
+/// clipboard, which the app is while the user is pasting). Called from a frame, on the UI
+/// thread, as the iPad bridge reads `UIPasteboard`.
+pub fn clipboard_text() -> Option<String> {
+    let text = with_activity(|env, activity| {
+        let Some(manager) = clipboard_manager(env, activity)? else { return Ok(None) };
+        let clip = env
+            .call_method(&manager, jni::jni_str!("getPrimaryClip"), jni::jni_sig!("()Landroid/content/ClipData;"), &[])?
+            .l()?;
+        if clip.is_null() {
+            return Ok(None);
+        }
+        let count = env.call_method(&clip, jni::jni_str!("getItemCount"), jni::jni_sig!("()I"), &[])?.i()?;
+        if count <= 0 {
+            return Ok(None);
+        }
+        let item = env
+            .call_method(
+                &clip,
+                jni::jni_str!("getItemAt"),
+                jni::jni_sig!("(I)Landroid/content/ClipData$Item;"),
+                &[jni::objects::JValue::Int(0)],
+            )?
+            .l()?;
+        if item.is_null() {
+            return Ok(None);
+        }
+        // The item's text as the app can show it (a plain string, a styled span, a URI's text).
+        let chars = env
+            .call_method(
+                &item,
+                jni::jni_str!("coerceToText"),
+                jni::jni_sig!("(Landroid/content/Context;)Ljava/lang/CharSequence;"),
+                &[jni::objects::JValue::Object(activity)],
+            )?
+            .l()?;
+        if chars.is_null() {
+            return Ok(None);
+        }
+        let string = env
+            .call_method(&chars, jni::jni_str!("toString"), jni::jni_sig!("()Ljava/lang/String;"), &[])?
+            .l()?;
+        if string.is_null() {
+            return Ok(None);
+        }
+        let text = env.cast_local::<JString>(string)?.try_to_string(env)?;
+        Ok((!text.is_empty()).then_some(text))
+    });
+    text.ok().flatten()
+}
+
+/// Put `text` on the system clipboard (`ClipData.newPlainText` + `setPrimaryClip`), so text
+/// copied in the app reaches other apps and survives a relaunch.
+pub fn set_clipboard_text(text: &str) {
+    let _ = with_activity(|env, activity| {
+        let Some(manager) = clipboard_manager(env, activity)? else { return Ok(()) };
+        let label = env.new_string("PhotoComfy")?;
+        let value = env.new_string(text)?;
+        let clip_class = env.find_class(jni::jni_str!("android/content/ClipData"))?;
+        let clip = env
+            .call_static_method(
+                &clip_class,
+                jni::jni_str!("newPlainText"),
+                jni::jni_sig!("(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Landroid/content/ClipData;"),
+                &[jni::objects::JValue::Object(&label), jni::objects::JValue::Object(&value)],
+            )?
+            .l()?;
+        env.call_method(
+            &manager,
+            jni::jni_str!("setPrimaryClip"),
+            jni::jni_sig!("(Landroid/content/ClipData;)V"),
+            &[jni::objects::JValue::Object(&clip)],
+        )?;
+        Ok(())
+    });
+}
+
+/// The activity's `ClipboardManager` (`getSystemService(CLIPBOARD_SERVICE)`); `None` only if the
+/// system has no clipboard service (it always does on an Android device).
+fn clipboard_manager<'a>(env: &mut jni::Env<'a>, activity: &JObject<'_>) -> Result<Option<JObject<'a>>, jni::errors::Error> {
+    let service = env.new_string("clipboard")?;
+    let manager = env
+        .call_method(
+            activity,
+            jni::jni_str!("getSystemService"),
+            jni::jni_sig!("(Ljava/lang/String;)Ljava/lang/Object;"),
+            &[jni::objects::JValue::Object(&service)],
+        )?
+        .l()?;
+    Ok((!manager.is_null()).then_some(manager))
+}
+
 /// `activity.getContentResolver()`.
 fn content_resolver<'a>(env: &mut jni::Env<'a>, activity: &JObject<'_>) -> Result<JObject<'a>, jni::errors::Error> {
     Ok(env
