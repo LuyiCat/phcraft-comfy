@@ -92,7 +92,7 @@ mod tools;
 use app::layer_thumb_frame;
 use app::read_dropped;
 pub use app::surface_fingerprint;
-pub(crate) use app::{adjustment_layer_active, remember_new_document};
+pub(crate) use app::{ThumbCache, ThumbFrames, adjustment_layer_active, remember_new_document};
 use canvas::ants;
 pub use canvas::artboard_ui;
 pub(crate) use canvas::background_redraw;
@@ -504,10 +504,10 @@ pub struct PhotocraftApp {
     path_document: Option<(DocId, u64, std::sync::Weak<Document>)>,
     pub fps: f32,
     pub(crate) last_frame_time: f64,
-    thumbs: HashMap<(photocraft_doc::LayerId, u8), (u64, egui::TextureHandle)>,
+    thumbs: ThumbCache,
     /// The document area each layer thumbnail in `thumbs` frames (the canvas, or the layer's
     /// bounds with Clip Thumbnails to Layer Bounds; #4281).
-    thumb_frames: HashMap<photocraft_doc::LayerId, photocraft_geom::Rect>,
+    thumb_frames: ThumbFrames,
     /// History snapshot thumbnails by (document, snapshot id), each with the snapshot document it
     /// shows (`snapshot_thumb`, #2966): made once, and again only when that is a different one (a
     /// preserved-ID reopen, or the first snapshot refreshed for a served font, #6087).
