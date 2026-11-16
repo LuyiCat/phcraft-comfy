@@ -726,6 +726,13 @@ pub struct PhotocraftApp {
     pub(crate) allow_close: bool,
     /// Pen pressure/tilt from the platform (see `stylus`).
     pub stylus: stylus::Stylus,
+    /// Which touch contact the emulated pointer press belongs to, and whether it is a finger
+    /// (input/finger.rs); updated at the top of `logic_frame`.
+    pub(crate) fingers: input::finger::FingerPresses,
+    /// Pen-only painting (the iPad shell turns it on): a finger's press never starts a brush
+    /// stroke or a Liquify push; the pencil, a mouse, automation and every other tool are
+    /// unaffected. Desktop, web and Android leave it off.
+    pub pen_only_painting: bool,
     control_click: control_click::ControlClick,
     /// Run long commands and file opens as background jobs with progress and Cancel (#210; see
     /// `jobs_ui`). The desktop app turns it on; off (the default), everything runs inline as
@@ -877,6 +884,15 @@ mod color_tab_theme_tests;
 
 #[cfg(test)]
 mod new_layer_button_tests;
+
+#[cfg(test)]
+mod layer_tray_ui_tests;
+
+#[cfg(test)]
+mod pen_only_painting_tests;
+
+#[cfg(test)]
+mod quick_actions_tests;
 
 #[cfg(test)]
 mod smart_filter_rows_tests;
