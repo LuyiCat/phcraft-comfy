@@ -22,10 +22,11 @@
 //! `ai.comfyui.fill` through that call — prompt plus source image in, one image back — skipping
 //! the whole queue/poll/download protocol.
 //!
-//! A server that is down can be started from here when the user configured how (Preferences ▸
-//! Integrations ▸ Start ComfyUI Automatically + the launch command): `ai.comfyui.start` runs it
-//! through the transport's `ComfyCall::Start`, and `generate`/`fill` do the same automatically
-//! before their first call. Loopback addresses only — a remote server is somebody else's to run.
+//! A server that is down can be started from here when the user asks for it (Preferences ▸
+//! Integrations ▸ Start ComfyUI Automatically): `ai.comfyui.start` runs the configured launch
+//! command — or, with none set, a local ComfyUI the desktop shell finds — through the transport's
+//! `ComfyCall::Start`, and `generate`/`fill` do the same automatically before their first call.
+//! Loopback addresses only — a remote server is somebody else's to run.
 
 use std::sync::Arc;
 
@@ -59,9 +60,10 @@ pub enum ComfyCall {
     Download { filename: String, subfolder: String, kind: String },
     /// POST /upload/image — an img2img source image.
     Upload { name: String, bytes: Vec<u8> },
-    /// Run the shell command that starts a local ComfyUI, then wait until `/system_stats`
-    /// answers (the desktop shell's transport; a probe first, so an already-running server
-    /// answers without spawning anything). The reply is the server's `/system_stats` JSON.
+    /// Start a local ComfyUI: run the shell command when one is given, else start a ComfyUI the
+    /// desktop shell finds on this machine, then wait until `/system_stats` answers (a probe
+    /// first, so an already-running server answers without spawning anything). The reply is the
+    /// server's `/system_stats` JSON.
     Start { command: String },
     /// The fixed OpenAI-compatible image call, no ComfyUI server in the loop (the iPad shell's
     /// transport): `/v1/images/edits` with a source image, `/v1/images/generations` without one.
@@ -664,17 +666,18 @@ pub(crate) fn url_is_loopback(url: &str) -> bool {
 }
 
 /// The launch command to start ComfyUI for `url`, when the user asked for auto-start: the
-/// preference must hold a command and the server must be loopback (`None` otherwise — including
-/// on the iPad, whose Image API transport has no server to start).
+/// configured command, or an empty one asking the shell to start a ComfyUI it finds on this
+/// machine (`None` otherwise — including on the iPad, whose Image API transport has no server to
+/// start).
 pub(crate) fn start_command(s: &Session, url: &str) -> Result<Option<String>> {
     if s.comfy.transport.is_none() || s.comfy.image_api {
         return Ok(None);
     }
     let i = &s.prefs().integrations;
-    let command = i.comfy_command.trim();
-    if !i.comfy_autostart || command.is_empty() || !url_is_loopback(url) {
+    if !i.comfy_autostart || !url_is_loopback(url) {
         return Ok(None);
     }
+    let command = i.comfy_command.trim();
     if command.len() > 2_000 {
         return Err(bad("ai.comfyui", "the ComfyUI launch command is longer than 2,000 characters"));
     }
@@ -988,8 +991,9 @@ fn generate(s: &mut Session, p: &Value) -> Result<Value> {
     let transport = transport_of(s)?;
     let url = url_of(s, p)?;
     // The launch command when auto-start is configured (None: the server is remote, or the
-    // user did not ask for it). The worker starts the server before its first call, so a cold
-    // ComfyUI never blocks the UI while it loads.
+    // user did not ask for it; empty asks the shell to start a local install it finds). The
+    // worker starts the server before its first call, so a cold ComfyUI never blocks the UI
+    // while it loads.
     let launch = start_command(s, &url)?;
     // img2img sends the visible document: clone the Arc now (cheap), the worker flattens it.
     let doc = match params.mode {
@@ -1040,19 +1044,15 @@ fn start(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(CMD, "the Image API backend has no ComfyUI server to start"));
     }
     let url = url_of(s, p)?;
-    let command = {
-        let c = s.prefs().integrations.comfy_command.trim().to_string();
-        if c.is_empty() {
-            return Err(bad(CMD, "set the ComfyUI launch command in Preferences, Integrations (for example `cd /opt/ComfyUI && python main.py --port 8188`)"));
-        }
-        if !url_is_loopback(&url) {
-            return Err(bad(CMD, format!("{url} is not on this machine; only a local server (like {DEFAULT_URL}) can be started")));
-        }
-        if c.len() > 2_000 {
-            return Err(bad(CMD, "the ComfyUI launch command is longer than 2,000 characters"));
-        }
-        c
-    };
+    if !url_is_loopback(&url) {
+        return Err(bad(CMD, format!("{url} is not on this machine; only a local server (like {DEFAULT_URL}) can be started")));
+    }
+    // The configured command, or empty: the desktop shell then starts a ComfyUI it finds on
+    // this machine, so the launch command stays optional in Preferences ▸ Integrations.
+    let command = s.prefs().integrations.comfy_command.trim().to_string();
+    if command.len() > 2_000 {
+        return Err(bad(CMD, "the ComfyUI launch command is longer than 2,000 characters"));
+    }
     jobs::run(
         s,
         "Start ComfyUI",
@@ -1152,7 +1152,7 @@ pub fn specs() -> Vec<CommandSpec> {
             label: "Start ComfyUI Server",
             menu: &[],
             shortcut: None,
-            params: r#"{"url":text} (empty: the preference) (runs the ComfyUI Launch Command from Preferences ▸ Integrations and waits until the local server answers; a job, so the UI stays responsive while a cold server loads)"#,
+            params: r#"{"url":text} (empty: the preference) (runs the ComfyUI Launch Command from Preferences ▸ Integrations — or, with none set, a local ComfyUI found on this machine — and waits until the local server answers; a job, so the UI stays responsive while a cold server loads)"#,
             enabled: start_enabled,
             run: start,
             journal: false,
@@ -1476,9 +1476,13 @@ mod tests {
         // No transport: refused like every other ai.comfyui command, never a panic.
         assert!(s.execute("ai.comfyui.start", json!({})).is_err());
         s.comfy.transport = Some(mock_transport(gguf_models()));
-        // Without a configured launch command the error says where to set it.
-        let e = s.execute("ai.comfyui.start", json!({})).unwrap_err().to_string();
-        assert!(e.contains("Integrations"), "{e}");
+        STARTS.with(|st| st.borrow_mut().clear());
+        // No configured command is not an error: the shell is asked to start a local ComfyUI it
+        // finds (the transport says why when there is none).
+        let r = s.execute("ai.comfyui.start", json!({})).unwrap();
+        assert_eq!(r["url"], DEFAULT_URL);
+        STARTS.with(|st| assert_eq!(st.borrow().as_slice(), [""]));
+        STARTS.with(|st| st.borrow_mut().clear());
         // A remote server is not ours to start, configured or not.
         s.prefs.edit(|p| p.integrations.comfy_command = "python main.py".into());
         let e = s.execute("ai.comfyui.start", json!({"url": "https://comfy.example.com"})).unwrap_err().to_string();
@@ -1511,6 +1515,11 @@ mod tests {
         });
         s.execute("ai.comfyui.generate", json!({"prompt": "a cat"})).unwrap();
         STARTS.with(|st| assert_eq!(st.borrow().as_slice(), ["cd /opt/ComfyUI && python main.py"]));
+        // On with no command: the shell is asked to start a local ComfyUI it finds.
+        STARTS.with(|st| st.borrow_mut().clear());
+        s.prefs.edit(|p| p.integrations.comfy_command = String::new());
+        s.execute("ai.comfyui.generate", json!({"prompt": "a cat"})).unwrap();
+        STARTS.with(|st| assert_eq!(st.borrow().as_slice(), [""]));
         // A remote server is never started, even with auto-start on (the mock answers any URL;
         // what matters is that no launch command ran for the remote one).
         STARTS.with(|st| st.borrow_mut().clear());

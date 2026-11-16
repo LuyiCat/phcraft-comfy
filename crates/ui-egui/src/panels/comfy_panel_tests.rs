@@ -152,15 +152,22 @@ fn a_paste_into_the_image_api_fields_commits_without_enter() {
 }
 
 /// A failed connection check offers Start ComfyUI: the click runs `ai.comfyui.start`, whose
-/// error (here: no launch command configured) lands in the check line, actionable.
+/// error (here: the shell found no local ComfyUI to start) lands in the check line, actionable.
 #[test]
 fn a_failed_check_offers_start_and_reports_why_it_cannot() {
     use egui_kittest::kittest::{NodeT, Queryable};
 
     let mut app = fresh_app();
     // A desktop-shaped transport (not the Image API one), so the connection row is ComfyUI's.
-    app.session.comfy.transport = Some(std::sync::Arc::new(|_req: &photocraft_engine::comfy_cmds::ComfyRequest| {
-        Err("io: Connection refused (os error 61)".to_string())
+    app.session.comfy.transport = Some(std::sync::Arc::new(|req: &photocraft_engine::comfy_cmds::ComfyRequest| {
+        // The desktop transport's start(): an empty command asks it to find a local install,
+        // and this machine has none.
+        match &req.call {
+            photocraft_engine::comfy_cmds::ComfyCall::Start { command } if command.is_empty() => {
+                Err("no local ComfyUI was found to start; set the ComfyUI launch command in Preferences, Integrations".to_string())
+            }
+            _ => Err("io: Connection refused (os error 61)".to_string()),
+        }
     }));
     app.ui.panels.comfy = true;
     app.comfy_queue.check = Some("✗ ComfyUI at http://127.0.0.1:8188 did not answer: io: Connection refused (os error 61)".into());

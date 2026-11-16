@@ -176,17 +176,26 @@ fn shell_command(command: &str) -> std::process::Command {
     cmd
 }
 
-/// Run the user's launch command and wait until this machine's ComfyUI answers. The server
-/// stays running after the app exits (it is the user's server, not a child we own); the Child
-/// handle is kept only to notice an early exit and reap it.
+/// Run the user's launch command and wait until this machine's ComfyUI answers. An empty
+/// command asks for a ComfyUI found on this machine ([`crate::comfy_detect`]: a ComfyUI Desktop install,
+/// or a checkout with a virtualenv). The server stays running after the app exits (it is the
+/// user's server, not a child we own); the Child handle is kept only to notice an early exit and
+/// reap it.
 fn start(url: &str, command: &str) -> Result<ComfyReply, String> {
-    let command = command.trim();
-    if command.is_empty() {
-        return Err("the ComfyUI launch command is empty; set it in Preferences ▸ Integrations".into());
-    }
+    start_in(url, command, &crate::comfy_detect::search_roots())
+}
+
+/// [`start`] against explicit search roots, so a test never starts this machine's real install.
+fn start_in(url: &str, command: &str, roots: &[std::path::PathBuf]) -> Result<ComfyReply, String> {
     if !is_loopback(url) {
         return Err(format!("{url} is not on this machine; only a local server (like http://127.0.0.1:8188) can be started"));
     }
+    let command = match command.trim() {
+        "" => crate::comfy_detect::find(roots).map(|install| install.command(crate::comfy_detect::url_port(url))).ok_or_else(|| {
+            "no local ComfyUI was found to start; set the ComfyUI launch command in Preferences, Integrations (for example `cd /opt/ComfyUI && python main.py --port 8188`)".to_string()
+        })?,
+        command => command.to_string(),
+    };
     // Already up (or another window's start finished first): no spawn, just confirm.
     if let Some(stats) = probe(url) {
         return Ok(ComfyReply::Json(stats));
@@ -200,7 +209,7 @@ fn start(url: &str, command: &str) -> Result<ComfyReply, String> {
     }
     if guard.is_none() {
         let mut log = std::fs::File::create(server_log());
-        let mut cmd = shell_command(command);
+        let mut cmd = shell_command(&command);
         if let Ok(f) = &mut log {
             use std::io::Write as _;
             let _ = writeln!(f, "$ {command}");
@@ -277,10 +286,13 @@ mod tests {
 
     #[test]
     fn start_refuses_what_it_must_not_run() {
-        // An empty command and a remote server are refused before anything is spawned.
-        assert!(start("http://127.0.0.1:8188", "   ").err().is_some_and(|e| e.contains("empty")));
-        let e = start("https://comfy.example.com", "python main.py").err().unwrap_or_default();
+        // A remote server is refused before anything is spawned.
+        let e = start_in("https://comfy.example.com", "python main.py", &[]).err().unwrap_or_default();
         assert!(e.contains("not on this machine"), "{e}");
+        // An empty command means "start a ComfyUI found here": with none, the error says where
+        // to set one, and nothing was spawned.
+        let e = start_in("http://127.0.0.1:8188", "   ", &[]).err().unwrap_or_default();
+        assert!(e.contains("no local ComfyUI") && e.contains("Integrations"), "{e}");
         // The shell wrapper carries the command as one argument, quotes and all.
         let cmd = shell_command("cd /opt/ComfyUI && python main.py");
         assert!(format!("{cmd:?}").contains("cd /opt/ComfyUI && python main.py"));

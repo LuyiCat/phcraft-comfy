@@ -1099,7 +1099,8 @@ pub struct Integrations {
     /// only, and only for a loopback server address — a remote one cannot be started from here.
     pub comfy_autostart: bool,
     /// The shell command that starts ComfyUI (run as `sh -c` / `cmd /C`), for example
-    /// `cd /opt/ComfyUI && python main.py --port 8188`. Empty: no auto-start.
+    /// `cd /opt/ComfyUI && python main.py --port 8188`. Empty: the desktop shell starts a local
+    /// ComfyUI it finds (a ComfyUI Desktop install, or a checkout with a virtualenv).
     pub comfy_command: String,
     /// The OpenAI-compatible image API the iPad app generates through directly (the "Image API
     /// Edit" workflow): base address like `https://api.example.com` (`/v1` appended when absent).

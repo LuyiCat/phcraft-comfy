@@ -475,9 +475,9 @@ fn connection(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
             run_check(app);
         }
     });
-    // A server that did not answer is usually just not running: one click starts it through the
-    // configured launch command (the engine says where to configure it when none is set). The
-    // start runs as a job, so the panel stays live while a cold ComfyUI loads.
+    // A server that did not answer is usually just not running: one click starts it — the
+    // configured launch command, or a local ComfyUI the desktop shell finds when none is set.
+    // The start runs as a job, so the panel stays live while a cold ComfyUI loads.
     let bad = app.comfy_queue.check.as_deref().is_some_and(|c| c.starts_with("✗"));
     if app.comfy_queue.starting {
         ui.label(egui::RichText::new("starting ComfyUI…").small().weak());
