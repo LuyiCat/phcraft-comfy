@@ -1758,6 +1758,7 @@ fn blend(b: usvg::BlendMode) -> BlendMode {
         B::Saturation => BlendMode::Saturation,
         B::Color => BlendMode::Color,
         B::Luminosity => BlendMode::Luminosity,
+        #[cfg(not(target_arch = "wasm32"))]
         B::PlusLighter => BlendMode::LinearDodge,
     }
 }
