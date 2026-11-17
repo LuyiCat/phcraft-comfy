@@ -1758,6 +1758,7 @@ fn blend(b: usvg::BlendMode) -> BlendMode {
         B::Saturation => BlendMode::Saturation,
         B::Color => BlendMode::Color,
         B::Luminosity => BlendMode::Luminosity,
+        B::PlusLighter => BlendMode::LinearDodge,
     }
 }
 
