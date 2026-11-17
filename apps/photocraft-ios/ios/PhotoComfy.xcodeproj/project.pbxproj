@@ -11,9 +11,9 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		AA2C0001000000000000000C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.info; name = Info.plist; path = PhotoCraft/Info.plist; sourceTree = "<group>"; };
-		AA2C0001000000000000000D /* PhotoCraft.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PhotoCraft.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		AA2C0001000000000000000E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = PhotoCraft/Assets.xcassets; sourceTree = "<group>"; };
+		AA2C0001000000000000000C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.info; name = Info.plist; path = PhotoComfy/Info.plist; sourceTree = "<group>"; };
+		AA2C0001000000000000000D /* PhotoComfy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PhotoComfy.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA2C0001000000000000000E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = PhotoComfy/Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -39,7 +39,7 @@
 		AA2C0001000000000000000B /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				AA2C0001000000000000000D /* PhotoCraft.app */,
+				AA2C0001000000000000000D /* PhotoComfy.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -47,22 +47,22 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		AA2C00010000000000000005 /* PhotoCraft */ = {
+		AA2C00010000000000000005 /* PhotoComfy */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = AA2C00010000000000000006 /* Build configuration list for PBXNativeTarget "PhotoCraft" */;
+			buildConfigurationList = AA2C00010000000000000006 /* Build configuration list for PBXNativeTarget "PhotoComfy" */;
 			buildPhases = (
 				AA2C0001000000000000000F /* Sources */,
 				AA2C00010000000000000010 /* Frameworks */,
 				AA2C00010000000000000011 /* Resources */,
-				AA2C00010000000000000009 /* Build the PhotoCraft binary with Cargo */,
+				AA2C00010000000000000009 /* Build the PhotoComfy binary with Cargo */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
-			name = PhotoCraft;
-			productName = PhotoCraft;
-			productReference = AA2C0001000000000000000D /* PhotoCraft.app */;
+			name = PhotoComfy;
+			productName = PhotoComfy;
+			productReference = AA2C0001000000000000000D /* PhotoComfy.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -78,7 +78,7 @@
 					};
 				};
 			};
-			buildConfigurationList = AA2C00010000000000000002 /* Build configuration list for PBXProject "PhotoCraft" */;
+			buildConfigurationList = AA2C00010000000000000002 /* Build configuration list for PBXProject "PhotoComfy" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -91,7 +91,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				AA2C00010000000000000005 /* PhotoCraft */,
+				AA2C00010000000000000005 /* PhotoComfy */,
 			);
 		};
 /* End PBXProject section */
@@ -108,7 +108,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		AA2C00010000000000000009 /* Build the PhotoCraft binary with Cargo */ = {
+		AA2C00010000000000000009 /* Build the PhotoComfy binary with Cargo */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -123,9 +123,9 @@
 				"$(SRCROOT)/../../apps/photocraft-ios/src/long_press.rs",
 				"$(SRCROOT)/../../apps/photocraft-ios/ios/PCSceneDelegate.m",
 				"$(SRCROOT)/../../apps/photocraft-ios/ios/PCDocumentPicker.m",
-				"$(SRCROOT)/../../apps/photocraft-ios/ios/PhotoCraft/Info.plist",
+				"$(SRCROOT)/../../apps/photocraft-ios/ios/PhotoComfy/Info.plist",
 			);
-			name = "Build the PhotoCraft binary with Cargo";
+			name = "Build the PhotoComfy binary with Cargo";
 			outputPaths = (
 				"$(DERIVED_FILE_DIR)/photocraft-ios.stamp",
 			);
@@ -201,7 +201,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = V9F6BSTSND;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = PhotoCraft/Info.plist;
+				INFOPLIST_FILE = PhotoComfy/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -229,7 +229,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = V9F6BSTSND;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = PhotoCraft/Info.plist;
+				INFOPLIST_FILE = PhotoComfy/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -250,7 +250,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		AA2C00010000000000000002 /* Build configuration list for PBXProject "PhotoCraft" */ = {
+		AA2C00010000000000000002 /* Build configuration list for PBXProject "PhotoComfy" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				AA2C00010000000000000003 /* Debug */,
@@ -259,7 +259,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		AA2C00010000000000000006 /* Build configuration list for PBXNativeTarget "PhotoCraft" */ = {
+		AA2C00010000000000000006 /* Build configuration list for PBXNativeTarget "PhotoComfy" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				AA2C00010000000000000007 /* Debug */,
