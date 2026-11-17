@@ -118,8 +118,10 @@ pub struct ComfyQueue {
     pub workflows: Vec<(String, bool, Value)>,
     /// True once the first listing has happened.
     pub listed: bool,
-    /// The connection check's one-line answer.
+    /// The ComfyUI connection check's one-line answer.
     pub check: Option<String>,
+    /// The Image API connection check's one-line answer.
+    pub check_api: Option<String>,
     /// A `ai.comfyui.start` job is running; when it ends, the connection re-checks itself.
     pub starting: bool,
     /// Result thumbnails, keyed by (created_ms, seed).
@@ -427,54 +429,61 @@ fn run_check(app: &mut PhotocraftApp) {
 }
 
 fn connection(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
+    if app.session.comfy.workflows_dir.is_some() {
+        ui.horizontal(|ui| {
+            ui.strong("ComfyUI Server");
+            let check = app.comfy_queue.check.clone().unwrap_or_else(|| "not checked".into());
+            let bad = check.starts_with("✗");
+            ui.colored_label(if bad { Color32::LIGHT_RED } else { Color32::LIGHT_GREEN }, if bad { "✗" } else { "✓" });
+            ui.label(egui::RichText::new(check).small().weak());
+        });
+        let mut url = app.session.prefs().integrations.comfy_url.clone();
+        ui.horizontal(|ui| {
+            ui.label("URL");
+            // Every change commits (Enter too): on a touch device there is no Enter between a
+            // paste and the Check tap, and the field otherwise discarded what it was holding.
+            let commit = |app: &mut PhotocraftApp, url: &str| {
+                app.session.prefs.edit(|p| p.integrations.comfy_url = url.trim().trim_end_matches('/').to_string());
+                app.comfy_queue.check = None;
+            };
+            let r = egui::TextEdit::singleline(&mut url).desired_width(ui.available_width() - 70.0).show(ui);
+            if r.response.changed() || (r.response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))) {
+                commit(app, &url);
+            }
+            if ui.button("Check").clicked() {
+                match app.run("ai.comfyui.check", json!({})) {
+                    Ok(v) => {
+                        let version = v.pointer("/server/system/comfyui_version").and_then(Value::as_str).unwrap_or("?").to_string();
+                        app.comfy_queue.check = Some(format!("ComfyUI {version}"));
+                    }
+                    Err(e) => app.comfy_queue.check = Some(format!("✗ {e}")),
+                }
+            }
+        });
+        // A server that did not answer is usually just not running: one click starts it — the
+        // configured launch command, or a local ComfyUI the desktop shell finds when none is set.
+        // The start runs as a job, so the panel stays live while a cold ComfyUI loads.
+        let bad = app.comfy_queue.check.as_deref().is_some_and(|c| c.starts_with("✗"));
+        if app.comfy_queue.starting {
+            ui.label(egui::RichText::new("starting ComfyUI…").small().weak());
+        } else if bad && ui.button("Start ComfyUI").clicked() {
+            match app.run("ai.comfyui.start", json!({})) {
+                Ok(_) => app.comfy_queue.starting = true,
+                Err(e) => app.comfy_queue.check = Some(format!("✗ {e}")),
+            }
+        }
+    }
     if app.session.comfy.image_api {
         connection_api(app, ui);
-        return;
-    }
-    ui.horizontal(|ui| {
-        ui.strong("Server");
-        let check = app.comfy_queue.check.clone().unwrap_or_else(|| "not checked".into());
-        let bad = check.starts_with("✗");
-        ui.colored_label(if bad { Color32::LIGHT_RED } else { Color32::LIGHT_GREEN }, if bad { "✗" } else { "✓" });
-        ui.label(egui::RichText::new(check).small().weak());
-    });
-    let mut url = app.session.prefs().integrations.comfy_url.clone();
-    ui.horizontal(|ui| {
-        ui.label("URL");
-        // Every change commits (Enter too): on a touch device there is no Enter between a
-        // paste and the Check tap, and the field otherwise discarded what it was holding.
-        let commit = |app: &mut PhotocraftApp, url: &str| {
-            app.session.prefs.edit(|p| p.integrations.comfy_url = url.trim().trim_end_matches('/').to_string());
-            app.comfy_queue.check = None;
-        };
-        let r = egui::TextEdit::singleline(&mut url).desired_width(ui.available_width() - 70.0).show(ui);
-        if r.response.changed() || (r.response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))) {
-            commit(app, &url);
-        }
-        if ui.button("Check").clicked() {
-            run_check(app);
-        }
-    });
-    // A server that did not answer is usually just not running: one click starts it — the
-    // configured launch command, or a local ComfyUI the desktop shell finds when none is set.
-    // The start runs as a job, so the panel stays live while a cold ComfyUI loads.
-    let bad = app.comfy_queue.check.as_deref().is_some_and(|c| c.starts_with("✗"));
-    if app.comfy_queue.starting {
-        ui.label(egui::RichText::new("starting ComfyUI…").small().weak());
-    } else if bad && ui.button("Start ComfyUI").clicked() {
-        match app.run("ai.comfyui.start", json!({})) {
-            Ok(_) => app.comfy_queue.starting = true,
-            Err(e) => app.comfy_queue.check = Some(format!("✗ {e}")),
-        }
     }
 }
 
-/// The Image API counterpart of [`connection`] (the iPad app): the endpoint, model and key every
-/// direct call uses, and a Check that asks the endpoint for its model list.
+/// The Image API counterpart of [`connection`]: the endpoint, model and key every direct call
+/// uses, and a Check that asks the endpoint for its model list.
 fn connection_api(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         ui.strong("Image API");
-        let check = app.comfy_queue.check.clone().unwrap_or_else(|| "not checked".into());
+        let check = app.comfy_queue.check_api.clone().unwrap_or_else(|| "not checked".into());
         let bad = check.starts_with("✗");
         ui.colored_label(if bad { Color32::LIGHT_RED } else { Color32::LIGHT_GREEN }, if bad { "✗" } else { "✓" });
         ui.label(egui::RichText::new(check).small().weak());
@@ -488,6 +497,7 @@ fn connection_api(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
             p.integrations.image_api_key = key.trim().to_string();
         });
         app.comfy_queue.check = None;
+        app.comfy_queue.check_api = None;
     };
     ui.horizontal(|ui| {
         ui.label("Endpoint");
@@ -511,18 +521,18 @@ fn connection_api(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
             commit(app, &base, &model, &key);
         }
         if ui.button("Check").clicked() {
-            match app.run("ai.comfyui.check", json!({})) {
+            match app.run("ai.comfyui.check", json!({"backend": "image_api"})) {
                 Ok(v) if v.get("api") == Some(&json!(true)) => {
                     let model = v.get("model").and_then(Value::as_str).unwrap_or("?").to_string();
                     let found = v.get("modelFound").and_then(Value::as_bool).unwrap_or(false);
-                    app.comfy_queue.check = Some(if found {
+                    app.comfy_queue.check_api = Some(if found {
                         format!("Image API ready — {model}")
                     } else {
                         format!("✗ the endpoint answers, but its model list has no {model}")
                     });
                 }
-                Ok(_) => app.comfy_queue.check = Some("✗ unexpected reply".into()),
-                Err(e) => app.comfy_queue.check = Some(format!("✗ {e}")),
+                Ok(_) => app.comfy_queue.check_api = Some("✗ unexpected reply".into()),
+                Err(e) => app.comfy_queue.check_api = Some(format!("✗ {e}")),
             }
         }
     });
@@ -545,7 +555,7 @@ fn workflow(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                 }
             });
         // Imported workflows need the store folder (the config dir's `comfy_workflows`): without
-        // one (the iPad app) there is nowhere to import into — and only ComfyUI graphs to import.
+        // one (a shell without a workflow store) there is nowhere to import into — and only ComfyUI graphs to import.
         let can_import = app.session.comfy.workflows_dir.is_some() || !app.session.prefs().integrations.comfy_workflows_dir.trim().is_empty();
         if can_import && ui.button("Import…").clicked() {
             let _ = app.pick_file_bytes_filtered(&["json"], |app, name, _bytes| {
