@@ -29,6 +29,8 @@ use std::time::SystemTime;
 use chrono::TimeZone as _;
 use photocraft_ui_egui::{FileDialogAnswer, FileDialogReply};
 
+use std::collections::{HashMap, HashSet};
+
 use crate::gallery::{GalleryEvent, GallerySource, GalleryTab};
 
 /// The shared storage root every Android device exposes once all-files access is granted.
@@ -128,9 +130,115 @@ struct ProjectEntry {
     modified: Option<SystemTime>,
 }
 
+#[derive(Clone)]
 enum Entry {
     Dir(String),
     File(String),
+}
+
+/// The Files tab's streaming thumbnails: one serial worker decodes the image files the rows
+/// can see, the pixels land in a shared map, and each dialog session keeps its own textures
+/// (the Gallery tab's pattern). The worker dies with the dialog, when the sender drops.
+#[derive(Default)]
+struct Thumbnails {
+    /// Decoded pixels keyed by path; `None` = the file has no thumbnail.
+    pixels: Arc<Mutex<HashMap<PathBuf, Option<egui::ColorImage>>>>,
+    /// The paths already requested, so a row asks once.
+    requested: HashSet<PathBuf>,
+    /// The worker's job channel.
+    jobs: Option<std::sync::mpsc::Sender<PathBuf>>,
+    /// Textures built this dialog session.
+    textures: HashMap<PathBuf, egui::TextureHandle>,
+}
+
+impl Thumbnails {
+    /// The row's thumbnail: the texture once the worker's pixels arrive, requested when the
+    /// row is first drawn. `None` until then, and for a file that has none.
+    fn texture(&mut self, ui: &mut egui::Ui, path: &Path) -> Option<egui::TextureHandle> {
+        if let Some(handle) = self.textures.get(path) {
+            return Some(handle.clone());
+        }
+        let arrived = self.pixels.lock().unwrap_or_else(PoisonError::into_inner).get(path).cloned();
+        match arrived {
+            Some(Some(image)) => {
+                let handle = ui.ctx().load_texture(format!("files-thumb-{}", path.display()), image, egui::TextureOptions::LINEAR);
+                self.textures.insert(path.to_path_buf(), handle.clone());
+                Some(handle)
+            }
+            Some(None) => None,
+            None => {
+                self.request(ui.ctx(), path);
+                None
+            }
+        }
+    }
+
+    /// Hand `path` to the worker, starting the worker first (once per dialog).
+    fn request(&mut self, ctx: &egui::Context, path: &Path) {
+        if !self.requested.insert(path.to_path_buf()) {
+            return;
+        }
+        if self.jobs.is_none() {
+            let (tx, rx) = std::sync::mpsc::channel();
+            self.jobs = Some(tx);
+            let pixels = Arc::clone(&self.pixels);
+            let ctx = ctx.clone();
+            // One serial worker: a steady drip of finished previews beats a burst of jank.
+            let _ = std::thread::Builder::new().name("files-thumbs".into()).spawn(move || {
+                while let Ok(path) = rx.recv() {
+                    let thumb = file_thumbnail(&path);
+                    pixels.lock().unwrap_or_else(PoisonError::into_inner).insert(path, thumb);
+                    ctx.request_repaint();
+                }
+            });
+        }
+        if let Some(tx) = &self.jobs {
+            let _ = tx.send(path.to_path_buf());
+        }
+    }
+}
+
+/// One image file's thumbnail: a bounded read, a size-limited decode and a downscale, so a
+/// hostile file can neither hang the worker nor balloon memory — the Home screen's recent
+/// files decode under the same limits.
+fn file_thumbnail(path: &Path) -> Option<egui::ColorImage> {
+    const MAX_FILE: u64 = 64 * 1024 * 1024;
+    let meta = std::fs::metadata(path).ok()?;
+    if !meta.is_file() || meta.len() > MAX_FILE {
+        return None;
+    }
+    let bytes = std::fs::read(path).ok()?;
+    let decode = photocraft_codecs::DecodeOptions {
+        limits: photocraft_codecs::Limits { max_width: 4096, max_height: 4096, max_pixels: 4096 * 4096, max_alloc: 4096 * 4096 * 4 },
+        ..Default::default()
+    };
+    let image = photocraft_codecs::decode_with(&bytes, &decode).ok()?;
+    let rgba = image.convert(photocraft_codecs::ChannelLayout::Rgba, photocraft_codecs::SampleType::U8);
+    downsample_rgba(rgba.width(), rgba.height(), rgba.data(), 256)
+}
+
+/// Downscale an RGBA8 buffer to fit within `max_dim` on its longest side (nearest pixel —
+/// these are 48 pt row thumbnails).
+fn downsample_rgba(w: u32, h: u32, data: &[u8], max_dim: u32) -> Option<egui::ColorImage> {
+    if w == 0 || h == 0 || data.len() != w as usize * h as usize * 4 {
+        return None;
+    }
+    let scale = (max_dim as f32 / w.max(h) as f32).min(1.0);
+    let tw = ((w as f32) * scale).round().max(1.0) as u32;
+    let th = ((h as f32) * scale).round().max(1.0) as u32;
+    let mut out = vec![0u8; tw as usize * th as usize * 4];
+    for y in 0..th {
+        let sy = ((y as f32 / th as f32) * h as f32) as usize;
+        for x in 0..tw {
+            let sx = ((x as f32 / tw as f32) * w as f32) as usize;
+            let src = (sy * w as usize + sx) * 4;
+            let dst = (y as usize * tw as usize + x as usize) * 4;
+            if let (Some(s), Some(d)) = (data.get(src..src + 4), out.get_mut(dst..dst + 4)) {
+                d.copy_from_slice(s);
+            }
+        }
+    }
+    Some(egui::ColorImage::from_rgba_unmultiplied([tw as usize, th as usize], &out))
 }
 
 /// The Projects tab: every saved document under [`projects_root`], newest first.
@@ -178,17 +286,10 @@ fn scan_projects(root: &Path) -> Vec<ProjectEntry> {
                     stack.push((dir.join(name), depth + 1));
                 }
             } else if file_type.is_file()
-                && name.rsplit_once('.').is_some_and(|(_, ext)| {
-                    PROJECT_EXTENSIONS.contains(&ext.to_ascii_lowercase().as_str())
-                })
+                && name.rsplit_once('.').is_some_and(|(_, ext)| PROJECT_EXTENSIONS.contains(&ext.to_ascii_lowercase().as_str()))
                 && let Ok(meta) = item.metadata()
             {
-                found.push(ProjectEntry {
-                    path: dir.join(&name),
-                    name,
-                    size: meta.len(),
-                    modified: meta.modified().ok(),
-                });
+                found.push(ProjectEntry { path: dir.join(&name), name, size: meta.len(), modified: meta.modified().ok() });
             }
         }
     }
@@ -218,6 +319,8 @@ struct Active {
     hint_dismissed: bool,
     gallery: GalleryTab,
     projects: ProjectsTab,
+    /// The Files tab's image previews ([`Thumbnails`]).
+    thumbs: Thumbnails,
 }
 
 /// The shared state behind `Services::file_dialog` (called on the UI thread by the app's
@@ -255,13 +358,7 @@ impl Browser {
     /// opens each result, so answering with a one-element `Paths` (or one `Contents`) stays
     /// correct. The default tab is the Gallery for an unfiltered Open — the phone's way in —
     /// and Files when the request filters extensions (a script or preset, not a photo).
-    pub fn begin_open(
-        &self,
-        multiple: bool,
-        initial_dir: Option<String>,
-        extensions: Option<Vec<String>>,
-        reply: FileDialogReply,
-    ) {
+    pub fn begin_open(&self, multiple: bool, initial_dir: Option<String>, extensions: Option<Vec<String>>, reply: FileDialogReply) {
         let _ = multiple;
         let filter = extensions.clone().unwrap_or_default().into_iter().map(|e| e.to_ascii_lowercase()).collect();
         let tab = if extensions.as_ref().is_some_and(|e| !e.is_empty()) { Tab::Files } else { Tab::Gallery };
@@ -281,6 +378,7 @@ impl Browser {
             hint_dismissed: false,
             gallery: GalleryTab::new(Arc::clone(&self.gallery)),
             projects: ProjectsTab::new(),
+            thumbs: Thumbnails::default(),
         };
         active.reload_files();
         *self.lock() = Some(active);
@@ -292,14 +390,8 @@ impl Browser {
     pub fn begin_save(&self, suggested: String, reply: FileDialogReply) {
         let (root, all_files) = browser_root();
         let suggested_path = Path::new(&suggested);
-        let dir = suggested_path
-            .parent()
-            .filter(|p| !p.as_os_str().is_empty() && p.is_dir())
-            .map(Path::to_path_buf)
-            .unwrap_or_else(projects_root);
-        let name = suggested_path
-            .file_name()
-            .map_or(suggested.clone(), |n| n.to_string_lossy().into_owned());
+        let dir = suggested_path.parent().filter(|p| !p.as_os_str().is_empty() && p.is_dir()).map(Path::to_path_buf).unwrap_or_else(projects_root);
+        let name = suggested_path.file_name().map_or(suggested.clone(), |n| n.to_string_lossy().into_owned());
         let mut active = Active {
             save: true,
             tab: Tab::Files,
@@ -314,6 +406,7 @@ impl Browser {
             hint_dismissed: false,
             gallery: GalleryTab::new(Arc::clone(&self.gallery)),
             projects: ProjectsTab::new(),
+            thumbs: Thumbnails::default(),
         };
         active.reload_files();
         *self.lock() = Some(active);
@@ -324,13 +417,7 @@ impl Browser {
     fn resolve_start(&self, initial_dir: Option<&str>, root: &Path) -> PathBuf {
         let last = self.last_dir.lock().unwrap_or_else(PoisonError::into_inner).clone();
         let download = root.join("Download");
-        initial_dir
-            .map(PathBuf::from)
-            .into_iter()
-            .chain(last)
-            .chain([download, root.to_path_buf()])
-            .find(|p| p.is_dir())
-            .unwrap_or_else(|| root.to_path_buf())
+        initial_dir.map(PathBuf::from).into_iter().chain(last).chain([download, root.to_path_buf()]).find(|p| p.is_dir()).unwrap_or_else(|| root.to_path_buf())
     }
 
     /// Draw the browser over the app (call after `app.ui_frame`, so this modal eats the
@@ -351,47 +438,45 @@ impl Browser {
         // app then has no space left), and being the same kind of layer as the app's own UI,
         // it hit-tests like it too.
         let mut outcome = Outcome { answer: None, action: Action::None };
-        egui::CentralPanel::default()
-            .frame(egui::Frame::new().fill(ui.visuals().panel_fill).inner_margin(24.0))
-            .show(ui, |ui| {
-                ui.set_min_width(620.0);
-                ui.horizontal(|ui| {
-                    ui.heading(if active.save { "Save as" } else { "Open file" });
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.button("Cancel").clicked() {
-                            outcome.answer = Some(None);
-                        }
-                        // ASCII only: every glyph here must exist in the embedded font set, a
-                        // missing one is a hard epaint panic (the Refresh spiral and the curly
-                        // quotes below froze the whole frame loop on device until they became
-                        // text).
-                        if ui.small_button("Refresh").clicked() {
-                            active.reload_current(ui.ctx());
-                        }
-                    });
-                });
-                if !active.save {
-                    active.draw_tabs(ui);
-                }
-                if matches!(active.tab, Tab::Files) {
-                    draw_files_banner(ui, active, granted, sdk(), &mut outcome);
-                    ui.add_space(4.0);
-                    ui.monospace(active.dir.to_string_lossy());
-                    ui.add_space(8.0);
-                    if active.save {
-                        active.draw_save_row(ui, &mut outcome);
-                        ui.add_space(8.0);
+        egui::CentralPanel::default().frame(egui::Frame::new().fill(ui.visuals().panel_fill).inner_margin(24.0)).show(ui, |ui| {
+            ui.set_min_width(620.0);
+            ui.horizontal(|ui| {
+                ui.heading(if active.save { "Save as" } else { "Open file" });
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.button("Cancel").clicked() {
+                        outcome.answer = Some(None);
                     }
-                    active.draw_files_rows(ui, &mut outcome);
-                } else if matches!(active.tab, Tab::Projects) {
-                    active.draw_projects(ui, &mut outcome);
-                } else if let GalleryEvent::Picked(name, bytes) = active.gallery.draw(ui) {
-                    outcome.answer = Some(Some(FileDialogAnswer::Contents(name, bytes)));
-                }
-                if let Some(error) = active.error.clone() {
-                    ui.colored_label(ui.visuals().error_fg_color, error);
-                }
+                    // ASCII only: every glyph here must exist in the embedded font set, a
+                    // missing one is a hard epaint panic (the Refresh spiral and the curly
+                    // quotes below froze the whole frame loop on device until they became
+                    // text).
+                    if ui.small_button("Refresh").clicked() {
+                        active.reload_current(ui.ctx());
+                    }
+                });
             });
+            if !active.save {
+                active.draw_tabs(ui);
+            }
+            if matches!(active.tab, Tab::Files) {
+                draw_files_banner(ui, active, granted, sdk(), &mut outcome);
+                ui.add_space(4.0);
+                ui.monospace(active.dir.to_string_lossy());
+                ui.add_space(8.0);
+                if active.save {
+                    active.draw_save_row(ui, &mut outcome);
+                    ui.add_space(8.0);
+                }
+                active.draw_files_rows(ui, &mut outcome);
+            } else if matches!(active.tab, Tab::Projects) {
+                active.draw_projects(ui, &mut outcome);
+            } else if let GalleryEvent::Picked(name, bytes) = active.gallery.draw(ui) {
+                outcome.answer = Some(Some(FileDialogAnswer::Contents(name, bytes)));
+            }
+            if let Some(error) = active.error.clone() {
+                ui.colored_label(ui.visuals().error_fg_color, error);
+            }
+        });
         // Deliver outside the panel closure, then close: the reply channel wakes the app's
         // pending file dialog, which continues on the next frame.
         if let Some(answer) = outcome.answer {
@@ -483,7 +568,8 @@ impl Active {
         ui.horizontal(|ui| {
             ui.label("Name");
             let edit = ui.text_edit_singleline(&mut self.name);
-            if edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))
+            if edit.lost_focus()
+                && ui.input(|i| i.key_pressed(egui::Key::Enter))
                 && let Some(picked) = self.save_answer()
             {
                 outcome.answer = Some(picked);
@@ -497,53 +583,63 @@ impl Active {
     }
 
     /// The Files tab's listing, scrolling: a phone's folders overflow one screen and the
-    /// finger expects to throw them (the touch UI widens the scroll bar).
+    /// finger expects to throw them (the touch UI widens the scroll bar). Image files show
+    /// the picture itself — a row is what you are about to open or place.
     fn draw_files_rows(&mut self, ui: &mut egui::Ui, outcome: &mut Outcome) {
-        egui::ScrollArea::vertical()
-            .id_salt("files-rows")
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                let can_go_up = self.dir != self.root;
-                if can_go_up
-                    && ui.button("..").clicked()
-                    && let Some(parent) = self.dir.parent()
-                {
-                    self.dir = parent.to_path_buf();
-                    self.reload_files();
-                }
-                // Index loop with the row data taken out first: entering a folder mutates the
-                // listing mid-iteration.
-                for index in 0..self.entries.len() {
-                    let Some((label, name, is_dir)) =
-                        self.entries.get(index).map(|entry| match entry {
-                            // Text prefixes, not emoji: the embedded font set has no glyphs
-                            // for them, and a missing glyph is a hard panic in epaint.
-                            Entry::Dir(name) => (format!("[dir]  {name}"), name.clone(), true),
-                            Entry::File(name) => (format!("       {name}"), name.clone(), false),
-                        })
-                    else {
-                        continue;
-                    };
-                    // A button, not selectable_label: on the device every button the shell
-                    // drew took its tap, every selectable_label row rendered but never did.
-                    if ui.button(label).clicked() {
-                        if is_dir {
-                            self.dir.push(name);
-                            self.reload_files();
-                            break;
-                        }
-                        if self.save {
-                            // Tapping a file in save mode fills the name field; the replace
-                            // prompt (if any) is the app's, driven by `file_stamp`.
-                            self.name = name;
-                        } else {
-                            let path = self.dir.join(name).to_string_lossy().into_owned();
-                            outcome.answer = Some(Some(FileDialogAnswer::Paths(vec![path])));
-                            break;
-                        }
+        if self.dir != self.root
+            && ui.button("..").clicked()
+            && let Some(parent) = self.dir.parent()
+        {
+            self.dir = parent.to_path_buf();
+            self.reload_files();
+        }
+        // The row data is taken out first: entering a folder mutates the listing
+        // mid-iteration. Virtualized rows — a granted device lists thousands of files, and
+        // only the visible ones ask the thumbnail worker for their previews.
+        let entries = self.entries.clone();
+        let dir = self.dir.clone();
+        let save = self.save;
+        let mut picked: Option<(String, bool)> = None;
+        egui::ScrollArea::vertical().id_salt("files-rows").auto_shrink([false, false]).show_rows(ui, 56.0, entries.len(), |ui, range| {
+            for (label, name, is_dir) in entries[range].iter().map(|entry| match entry {
+                // Text prefixes, not emoji: the embedded font set has no glyphs
+                // for them, and a missing glyph is a hard panic in epaint.
+                Entry::Dir(name) => (format!("[dir]  {name}"), name.clone(), true),
+                Entry::File(name) => (format!("       {name}"), name.clone(), false),
+            }) {
+                // A button, not selectable_label: on the device every button the shell
+                // drew took its tap, every selectable_label row rendered but never did.
+                let path = dir.join(&name);
+                let clicked = match self.thumbs.texture(ui, &path) {
+                    Some(texture) => {
+                        let image =
+                            egui::Image::new(egui::load::SizedTexture::new(texture.id(), egui::vec2(48.0, 48.0))).fit_to_exact_size(egui::vec2(48.0, 48.0));
+                        ui.add(egui::Button::image_and_text(image, label)).clicked()
                     }
+                    None => ui.add(egui::Button::new(label)).clicked(),
+                };
+                if clicked {
+                    if is_dir {
+                        picked = Some((name, true));
+                    } else if save {
+                        // Tapping a file in save mode fills the name field; the replace
+                        // prompt (if any) is the app's, driven by `file_stamp`.
+                        self.name = name;
+                    } else {
+                        picked = Some((name, false));
+                    }
+                    break;
                 }
-            });
+            }
+        });
+        if let Some((name, into_dir)) = picked {
+            if into_dir {
+                self.dir.push(name);
+                self.reload_files();
+            } else {
+                outcome.answer = Some(Some(FileDialogAnswer::Paths(vec![dir.join(name).to_string_lossy().into_owned()])));
+            }
+        }
     }
 
     /// The Projects tab: every saved document, newest first, one tap to open. Scrolling,
@@ -552,34 +648,23 @@ impl Active {
         if !self.projects.loaded {
             self.projects.reload();
         }
-        ui.label(format!(
-            "Saved documents stay in the app: {}",
-            projects_root().to_string_lossy()
-        ));
+        ui.label(format!("Saved documents stay in the app: {}", projects_root().to_string_lossy()));
         ui.add_space(4.0);
         if let Some(error) = self.projects.error.clone() {
             ui.label(error);
             return;
         }
-        egui::ScrollArea::vertical()
-            .id_salt("projects-rows")
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                for index in 0..self.projects.entries.len() {
-                    let Some(entry) = self.projects.entries.get(index) else { continue };
-                    let label = format!(
-                        "{}  {}  {}",
-                        entry.name,
-                        date_text(entry.modified),
-                        size_text(entry.size)
-                    );
-                    if ui.button(label).clicked() {
-                        let path = entry.path.to_string_lossy().into_owned();
-                        outcome.answer = Some(Some(FileDialogAnswer::Paths(vec![path])));
-                        break;
-                    }
+        egui::ScrollArea::vertical().id_salt("projects-rows").auto_shrink([false, false]).show(ui, |ui| {
+            for index in 0..self.projects.entries.len() {
+                let Some(entry) = self.projects.entries.get(index) else { continue };
+                let label = format!("{}  {}  {}", entry.name, date_text(entry.modified), size_text(entry.size));
+                if ui.button(label).clicked() {
+                    let path = entry.path.to_string_lossy().into_owned();
+                    outcome.answer = Some(Some(FileDialogAnswer::Paths(vec![path])));
+                    break;
                 }
-            });
+            }
+        });
     }
 
     fn reload_files(&mut self) {
@@ -614,8 +699,7 @@ impl Active {
         if self.filter.is_empty() {
             return true;
         }
-        name.rsplit_once('.')
-            .is_some_and(|(_, ext)| self.filter.contains(&ext.to_ascii_lowercase()))
+        name.rsplit_once('.').is_some_and(|(_, ext)| self.filter.contains(&ext.to_ascii_lowercase()))
     }
 
     fn save_answer(&mut self) -> Option<Option<FileDialogAnswer>> {

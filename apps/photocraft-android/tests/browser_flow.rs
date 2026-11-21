@@ -4,12 +4,12 @@
 //! rendering but never hit-testing when drawn by the Android shell, so the flow is pinned
 //! here where the harness's pointer is authoritative.
 
-use std::sync::mpsc;
 use std::sync::Arc;
+use std::sync::mpsc;
 use std::time::Duration;
 
-use egui_kittest::kittest::Queryable;
 use egui_kittest::Harness;
+use egui_kittest::kittest::Queryable;
 use photocraft_android::browser::{Action, Browser};
 use photocraft_ui_egui::{FileDialogAnswer, FileDialogReply};
 
@@ -37,11 +37,10 @@ fn reply(ctx: &egui::Context) -> (FileDialogReply, mpsc::Receiver<Option<FileDia
 }
 
 fn harness(browser: &Arc<Browser>) -> Harness<'static, Shell> {
-    let mut harness: Harness<'static, Shell> =
-        Harness::builder().with_size(egui::vec2(914.0, 571.0)).with_pixels_per_point(2.0).build_eframe(|cc| {
-            photocraft_ui_egui::PhotocraftApp::setup_context(&cc.egui_ctx, Default::default());
-            Shell { browser: browser.clone() }
-        });
+    let mut harness: Harness<'static, Shell> = Harness::builder().with_size(egui::vec2(914.0, 571.0)).with_pixels_per_point(2.0).build_eframe(|cc| {
+        photocraft_ui_egui::PhotocraftApp::setup_context(&cc.egui_ctx, Default::default());
+        Shell { browser: browser.clone() }
+    });
     harness.run_steps(2);
     harness
 }
@@ -76,10 +75,7 @@ fn tapping_a_file_row_answers_its_path() {
     harness.run_steps(5);
 
     let answer = recv(&rx).expect("an answer arrives");
-    assert_eq!(
-        answer,
-        Some(FileDialogAnswer::Paths(vec![dir.join("Download").join("picture.png").to_string_lossy().into_owned()]))
-    );
+    assert_eq!(answer, Some(FileDialogAnswer::Paths(vec![dir.join("Download").join("picture.png").to_string_lossy().into_owned()])));
     assert!(!browser.is_active(), "the browser closed after answering");
 
     let _ = std::fs::remove_dir_all(&dir);
@@ -120,11 +116,51 @@ fn save_mode_answers_the_prefilled_path() {
     harness.get_by_label("Save").click();
     harness.run_steps(5);
 
-    assert_eq!(
-        recv(&rx),
-        Some(Some(FileDialogAnswer::SaveTo(
-            std::env::temp_dir().join("Projects").join("artwork.png").to_string_lossy().into_owned()
-        )))
-    );
+    assert_eq!(recv(&rx), Some(Some(FileDialogAnswer::SaveTo(std::env::temp_dir().join("Projects").join("artwork.png").to_string_lossy().into_owned()))));
+    assert!(!browser.is_active());
+}
+
+/// Pump frames until `done` holds or two seconds pass: the Files tab's thumbnails decode on
+/// a worker thread, which answers between frames (the gallery flow's helper, the same need).
+fn wait_for(harness: &mut Harness<'static, Shell>, done: impl Fn(&Harness<'static, Shell>) -> bool) -> bool {
+    let deadline = std::time::Instant::now() + Duration::from_secs(2);
+    while std::time::Instant::now() < deadline {
+        harness.run_steps(2);
+        std::thread::sleep(Duration::from_millis(10));
+        if done(harness) {
+            return true;
+        }
+    }
+    false
+}
+
+/// A file row shows the picture itself once its thumbnail decodes: the row grows from a text
+/// line to a 48 pt image button, so picking a file to open or place shows what you get, not
+/// just its name.
+#[test]
+fn a_file_row_shows_the_images_thumbnail() {
+    let dir = std::env::temp_dir().join(format!("pc-browser-thumb-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("fixture dir");
+    let image = photocraft_codecs::Image::from_u8(2, 1, photocraft_codecs::ChannelLayout::Rgba, vec![255, 0, 0, 255, 0, 0, 255, 255]).expect("fixture image");
+    let png = photocraft_codecs::encode(&image, photocraft_codecs::Format::Png, &photocraft_codecs::EncodeOptions::default()).expect("fixture png");
+    std::fs::write(dir.join("photo.png"), png).expect("write fixture png");
+
+    let browser = Browser::shared();
+    let mut harness = harness(&browser);
+    let (reply, rx) = reply(&harness.ctx);
+    browser.begin_open(true, Some(dir.to_string_lossy().into_owned()), None, reply);
+    harness.run_steps(3);
+    assert!(browser.is_active(), "the browser opens");
+    harness.get_by_label("Files").click();
+    harness.run_steps(3);
+
+    let before = harness.get_by_label("       photo.png").rect().height();
+    let grown = wait_for(&mut harness, |h| h.get_by_label("       photo.png").rect().height() > 40.0);
+    assert!(grown, "the row shows the decoded image (was {before:.1} pt tall)");
+
+    // The thumbnail is a preview, not a pick: the row still answers its path.
+    harness.get_by_label("       photo.png").click();
+    harness.run_steps(3);
+    assert_eq!(recv(&rx), Some(Some(FileDialogAnswer::Paths(vec![dir.join("photo.png").to_string_lossy().into_owned()]))));
     assert!(!browser.is_active());
 }
