@@ -164,3 +164,31 @@ fn a_file_row_shows_the_images_thumbnail() {
     assert_eq!(recv(&rx), Some(Some(FileDialogAnswer::Paths(vec![dir.join("photo.png").to_string_lossy().into_owned()]))));
     assert!(!browser.is_active());
 }
+
+/// A camera RAW that carries its preview as an embedded JPEG (ARW, NEF and their kin) shows
+/// that preview, even though the container itself is not a decodable picture.
+#[test]
+fn a_raw_file_row_shows_its_embedded_jpeg_preview() {
+    let dir = std::env::temp_dir().join(format!("pc-browser-raw-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("fixture dir");
+    let image = photocraft_codecs::Image::from_u8(256, 192, photocraft_codecs::ChannelLayout::Rgba, vec![80u8; 256 * 192 * 4]).expect("fixture image");
+    let jpeg = photocraft_codecs::encode(&image, photocraft_codecs::Format::Jpeg, &photocraft_codecs::EncodeOptions::default()).expect("fixture jpeg");
+    // A RAW-shaped container: a TIFF-ish header, then the preview deep enough that the whole
+    // file is not a picture.
+    let mut raw = vec![0x49, 0x49, 0x2A, 0x00];
+    raw.extend(std::iter::repeat_n(0xAB, 512));
+    raw.extend_from_slice(&jpeg);
+    raw.extend(std::iter::repeat_n(0xCD, 512));
+    std::fs::write(dir.join("DSC01234.ARW"), raw).expect("write fixture raw");
+
+    let browser = Browser::shared();
+    let mut harness = harness(&browser);
+    let (reply, _rx) = reply(&harness.ctx);
+    browser.begin_open(true, Some(dir.to_string_lossy().into_owned()), None, reply);
+    harness.run_steps(3);
+    harness.get_by_label("Files").click();
+    harness.run_steps(3);
+
+    let grown = wait_for(&mut harness, |h| h.get_by_label("       DSC01234.ARW").rect().height() > 40.0);
+    assert!(grown, "the raw's row shows its embedded preview");
+}

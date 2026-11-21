@@ -198,23 +198,69 @@ impl Thumbnails {
     }
 }
 
-/// One image file's thumbnail: a bounded read, a size-limited decode and a downscale, so a
-/// hostile file can neither hang the worker nor balloon memory — the Home screen's recent
-/// files decode under the same limits.
+/// One image file's thumbnail: a bounded read, then either the file itself (generous pixel
+/// caps — an 8K photo decodes; the allocation cap is the memory guard) or, when that is
+/// refused, the biggest JPEG embedded in it — camera RAWs (ARW, NEF, CR2…) carry their
+/// preview that way, and a huge image still rides its EXIF thumbnail along. Never a panic,
+/// never an unbounded allocation, whatever the file says it is.
 fn file_thumbnail(path: &Path) -> Option<egui::ColorImage> {
-    const MAX_FILE: u64 = 64 * 1024 * 1024;
+    const MAX_FILE: u64 = 128 * 1024 * 1024;
     let meta = std::fs::metadata(path).ok()?;
     if !meta.is_file() || meta.len() > MAX_FILE {
         return None;
     }
     let bytes = std::fs::read(path).ok()?;
+    if let Some(thumb) = decode_to_thumb(&bytes, 16_384, 160 * 1024 * 1024) {
+        return Some(thumb);
+    }
+    embedded_jpeg(&bytes)
+}
+
+/// `bytes` decoded and downscaled under the caps, when it is a decodable picture within them.
+fn decode_to_thumb(bytes: &[u8], max_dim: u32, max_alloc: u64) -> Option<egui::ColorImage> {
     let decode = photocraft_codecs::DecodeOptions {
-        limits: photocraft_codecs::Limits { max_width: 4096, max_height: 4096, max_pixels: 4096 * 4096, max_alloc: 4096 * 4096 * 4 },
+        limits: photocraft_codecs::Limits { max_width: max_dim, max_height: max_dim, max_pixels: u64::from(max_dim) * u64::from(max_dim), max_alloc },
         ..Default::default()
     };
-    let image = photocraft_codecs::decode_with(&bytes, &decode).ok()?;
+    let image = photocraft_codecs::decode_with(bytes, &decode).ok()?;
     let rgba = image.convert(photocraft_codecs::ChannelLayout::Rgba, photocraft_codecs::SampleType::U8);
     downsample_rgba(rgba.width(), rgba.height(), rgba.data(), 256)
+}
+
+/// The biggest JPEG embedded in the first slice of the file: a RAW's preview sits early, so
+/// only that far is scanned. `None` when nothing embedded decodes.
+fn embedded_jpeg(bytes: &[u8]) -> Option<egui::ColorImage> {
+    let scan = &bytes[..bytes.len().min(48 * 1024 * 1024)];
+    let mut best: Option<egui::ColorImage> = None;
+    let mut best_area = 0usize;
+    let mut tries = 0;
+    let mut search = 0usize;
+    // A JPEG starts FF D8 FF; trying each candidate and keeping the largest that decodes
+    // finds the preview without knowing any container's layout.
+    while tries < 8 {
+        let Some(relative) = scan.get(search..).and_then(|rest| rest.windows(3).position(|w| w == [0xFF, 0xD8, 0xFF])) else {
+            break;
+        };
+        let start = search + relative;
+        tries += 1;
+        search = start + 3;
+        let end = scan[start..].windows(2).position(|w| w == [0xFF, 0xD9]).map_or(scan.len(), |at| start + at + 2);
+        let Some(candidate) = scan.get(start..end).filter(|jpeg| jpeg.len() >= 1024) else {
+            continue;
+        };
+        if let Some(image) = decode_to_thumb(candidate, 8_192, 96 * 1024 * 1024) {
+            let area = image.size[0] * image.size[1];
+            if area > best_area {
+                best_area = area;
+                best = Some(image);
+            }
+            // A full-size preview: nothing later in the file is bigger.
+            if area >= 1024 * 1024 {
+                break;
+            }
+        }
+    }
+    best
 }
 
 /// Downscale an RGBA8 buffer to fit within `max_dim` on its longest side (nearest pixel —
