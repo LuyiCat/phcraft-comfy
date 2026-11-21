@@ -42,9 +42,9 @@ mod shell {
     use std::path::PathBuf;
     use std::sync::{Arc, OnceLock};
 
+    use crate::long_press::LongPress;
     use photocraft_codecs::{ChannelLayout, EncodeOptions, Image};
     use photocraft_doc::Document;
-    use crate::long_press::LongPress;
     use photocraft_ui_egui::theme::ThemeKind;
     use photocraft_ui_egui::{FileDialogRequest, FileStamp, PhotocraftApp, Services};
     use winit::platform::android::activity::AndroidApp;
@@ -82,10 +82,14 @@ mod shell {
         let mut options = native_options();
         options.android_app = Some(app);
         let shell_browser = browser.clone();
-        let result = eframe::run_native("PhotoComfy", options, Box::new(move |cc| {
-            breadcrumb("app created");
-            Ok(Box::new(AndroidShell::new(cc, shell_browser)))
-        }));
+        let result = eframe::run_native(
+            "PhotoComfy",
+            options,
+            Box::new(move |cc| {
+                breadcrumb("app created");
+                Ok(Box::new(AndroidShell::new(cc, shell_browser)))
+            }),
+        );
         breadcrumb(&format!("run_native returned: {result:?}"));
     }
 
@@ -95,10 +99,7 @@ mod shell {
     /// crash names the step that never happened; no entries at all means the library never ran
     /// (packaging or a load error, visible in `adb logcat`).
     fn breadcrumb(step: &str) {
-        let line = format!(
-            "[{:?}] {step}\n",
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
-        );
+        let line = format!("[{:?}] {step}\n", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0));
         log::info!("{step}");
         if let Some(dir) = files_dir() {
             use std::io::Write as _;
@@ -208,9 +209,7 @@ mod shell {
             }
             // Testing aid: the portrait panel drawer starts open on Layers, for visual checks.
             if std::env::var_os("PHOTOCRAFT_OPEN_DRAWER").is_some() {
-                cc.egui_ctx.data_mut(|d| {
-                    d.insert_temp(egui::Id::unique("touch-drawer"), Some(photocraft_ui_egui::dock::Group::Layers))
-                });
+                cc.egui_ctx.data_mut(|d| d.insert_temp(egui::Id::unique("touch-drawer"), Some(photocraft_ui_egui::dock::Group::Layers)));
             }
             // Long commands and file opens run as background jobs with progress, as on the desktop.
             app.background_jobs = true;
@@ -245,13 +244,19 @@ mod shell {
             if raw_input.events.iter().any(|e| matches!(e, egui::Event::Touch { .. })) {
                 static TOUCHES: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
                 let n = TOUCHES.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                // The pointer count says whether winit's touch→pointer emulation rode along
+                // (buttons and sliders answer the emulated press; a bare Touch does not click).
+                // `PHOTOCRAFT_DEBUG_ANDROID` swaps the line for the full event batch — the
+                // shape that named the floating-layer dead-input report (same idea as the
+                // iOS shell's `PHOTOCRAFT_DEBUG_IOS`).
+                let pointers = raw_input.events.iter().filter(|e| matches!(e, egui::Event::PointerButton { .. } | egui::Event::PointerMoved(_))).count();
                 breadcrumb(&format!(
-                    "touch #{n} at {:?} screen {:?}",
+                    "touch #{n} at {:?} pointer events {pointers}{}",
                     raw_input.events.iter().find_map(|e| match e {
                         egui::Event::Touch { pos, .. } => Some(pos),
                         _ => None,
                     }),
-                    raw_input.screen_rect
+                    if std::env::var_os("PHOTOCRAFT_DEBUG_ANDROID").is_some() { format!(" events {:?}", raw_input.events) } else { String::new() },
                 ));
             }
             photocraft_ui_egui::touch_twins::drop_twins(ctx, raw_input);
@@ -293,17 +298,13 @@ mod shell {
             // The in-app browser (see `browser`): answers carry real paths on the shared
             // storage, so replace prompts and File ▸ Save in place work as on the desktop.
             file_dialog: Some(Box::new(move |request, _parent, reply| match request {
-                FileDialogRequest::Open { multiple, initial_dir, extensions, .. } => {
-                    browser.begin_open(multiple, initial_dir, extensions, reply)
-                }
+                FileDialogRequest::Open { multiple, initial_dir, extensions, .. } => browser.begin_open(multiple, initial_dir, extensions, reply),
                 // Folder pickers have no browser counterpart (as on the web): back out.
                 FileDialogRequest::Folder { .. } => reply.send(None),
                 FileDialogRequest::Save { suggested } => browser.begin_save(suggested, reply),
             })),
             write: Some(Box::new(|path: &str, bytes: &[u8]| write_atomic(path, bytes))),
-            file_stamp: Some(Box::new(|path: &str| {
-                std::fs::metadata(path).ok().map(|m| FileStamp { len: m.len(), modified: m.modified().ok() })
-            })),
+            file_stamp: Some(Box::new(|path: &str| std::fs::metadata(path).ok().map(|m| FileStamp { len: m.len(), modified: m.modified().ok() }))),
             same_file: Some(Box::new(|a: &str, b: &str| {
                 use std::os::unix::fs::MetadataExt as _;
                 match (std::fs::metadata(a), std::fs::metadata(b)) {
