@@ -112,6 +112,25 @@ fn a_mouse_click_oks_the_camera_raw_filter() {
     walk_ok(click);
 }
 
+/// A phone-camera-sized document (3k×5k, portrait) commits the same way: the field report
+/// said the filter would not apply at that size. Slow on purpose — the develop is real.
+#[test]
+fn a_tap_oks_the_camera_raw_filter_on_a_3k5k_document() {
+    let mut h = Harness::builder().with_size(vec2(1360.0, 900.0)).with_max_steps(24).build_eframe(|cc| {
+        PhotocraftApp::setup_context(&cc.egui_ctx, Default::default());
+        let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({"width": 3000, "height": 5000, "background": "white"})).ok();
+        app
+    });
+    h.run_steps(4);
+    camera_raw_open(&mut h);
+    let ok = h.get_by_label("OK").rect().center();
+    click(&mut h, ok);
+    assert!(h.state().camera_raw.is_none(), "OK answered the tap and closed the dialog");
+    let names: Vec<String> = h.state().session.active().map(|st| st.history.entries().to_vec()).unwrap_or_default();
+    assert!(names.iter().any(|n| n.contains("Camera Raw")), "{names:?}");
+}
+
 #[test]
 fn a_finger_tap_oks_the_camera_raw_filter() {
     walk_ok(finger_tap);
