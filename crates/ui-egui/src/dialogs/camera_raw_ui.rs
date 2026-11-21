@@ -35,7 +35,7 @@ mod open;
 mod proxy;
 mod sidecar;
 
-pub use controls::show;
+pub use controls::{fullscreen, show};
 #[cfg(test)]
 use convert::open_pixels;
 pub use menu::menu;
