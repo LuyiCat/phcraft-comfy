@@ -75,9 +75,19 @@ export CARGO_TARGET_DIR="$REPO/target/android"
 # other script text has no glyphs to fall back to (readable system Noto paths are still tried
 # first; see crates/text/src/cjk.rs). The documented sibling checkout is picked up
 # automatically; CRAFT_FONTS_DIR set outside wins.
-if [ -z "${CRAFT_FONTS_DIR:-}" ] && [ -d "$REPO/../craft-fonts/fonts" ]; then
-    CRAFT_FONTS_DIR="$REPO/../craft-fonts"
-    export CRAFT_FONTS_DIR
+if [ -z "${CRAFT_FONTS_DIR:-}" ]; then
+    # The documented sibling checkout of the repo root. In a linked worktree the root lives
+    # under target/, so its sibling is not the fonts checkout; the main checkout's sibling
+    # (next to the .git dir) is probed too, or a build from a worktree embeds no fonts and
+    # every CJK glyph on the device is tofu.
+    MAIN="$(git -C "$REPO" rev-parse --path-format=absolute --git-common-dir 2>/dev/null | xargs dirname 2>/dev/null)"
+    for root in "$REPO" "$MAIN"; do
+        if [ -n "$root" ] && [ -d "$root/../craft-fonts/fonts" ]; then
+            CRAFT_FONTS_DIR="$(cd "$root/.." && pwd)/craft-fonts"
+            export CRAFT_FONTS_DIR
+            break
+        fi
+    done
 fi
 
 VERSION="$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)"
