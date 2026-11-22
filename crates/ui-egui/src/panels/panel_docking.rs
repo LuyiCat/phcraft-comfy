@@ -528,6 +528,15 @@ fn app_owned(app: &mut PhotocraftApp, command: DockCommand<String>) -> Result<Va
 /// Draw the layout, the canvas included, in the space `ui` has left: the customized workspace,
 /// else the native dock's arrangement.
 pub(crate) fn show(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
+    // A full-screen overlay outside the app (the mobile shell's file browser draws one before
+    // the app's own frame) can leave the frame no space at all. There is nothing to draw then,
+    // and craft-ui would report the unusable rect as a docking error every frame — the sticky
+    // "docking geometry is not finite and bounded" over a file dialog. Nothing drawn, nothing
+    // reported.
+    let room = ui.available_rect_before_wrap();
+    if !room.is_finite() || !room.is_positive() {
+        return;
+    }
     let area = area_id();
     let changed_workspace = ui.ctx().data_mut(|data| {
         let previous = data.get_temp::<u64>(area.with("generation"));

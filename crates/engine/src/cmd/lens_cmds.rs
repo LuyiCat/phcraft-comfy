@@ -191,18 +191,37 @@ pub fn camera_raw_surface(surf: &Surface, area: Rect, p: &CameraRaw) -> Surface 
     let (w, h) = (area.width() as usize, area.height() as usize);
     let mut px = rgba_region(surf, area, len);
     camera_raw::develop(&mut px, w, h, p, fmt.sample == SampleType::F32);
+    // The developed pixels convert and land band by band, not as whole-region planes: a band
+    // buffer is megabytes, where the whole-region source copy and its converted twin were a
+    // quarter gigabyte each at 15 MP, and the ~1 GB peak is what a tablet's memory ceiling
+    // refused ("not enough memory"). The developed `px` still holds the whole region — the
+    // pipeline's spatial passes are whole-image — so this halves the peak, not the floor.
     let n = fmt.channels();
-    let orig = surf.read_region(area);
-    let mut data = vec![0.0f32; w * h * n];
-    for (i, (q, o)) in px.iter().zip(data.chunks_exact_mut(n)).enumerate() {
-        from_rgba_into(&fmt, *q, o);
-        if fmt.alpha {
-            // Alpha is untouched.
-            o[n - 1] = orig[i * n + n - 1];
-        }
-    }
     let mut out = surf.clone();
-    out.write_region(area, &data);
+    const BAND_ROWS: usize = 128;
+    let mut band = Vec::new();
+    let mut alpha = Vec::new();
+    let mut y = 0usize;
+    while y < h {
+        let rows = BAND_ROWS.min(h - y);
+        let band_area = Rect::from_xywh(area.x0, area.y0 + y as i32, area.width(), rows as u32);
+        // Only alpha needs the source back: every colour channel comes from `px`.
+        if fmt.alpha {
+            surf.read_region_into(band_area, &mut alpha);
+        }
+        band.clear();
+        for (i, q) in px[y * w..(y + rows) * w].iter().enumerate() {
+            let mut o = [0.0f32; 4];
+            from_rgba_into(&fmt, *q, &mut o);
+            if fmt.alpha {
+                // Alpha is untouched.
+                o[n - 1] = alpha[i * n + n - 1];
+            }
+            band.extend_from_slice(&o[..n]);
+        }
+        out.write_region(band_area, &band);
+        y += rows;
+    }
     out.prune();
     out
 }
@@ -668,6 +687,41 @@ mod tests {
         s.execute(RAW, json!({"saturation": -100})).unwrap();
         let p = active_px(&s, 60, 40);
         assert!((p[0] - p[2]).abs() < 0.01, "{p:?}");
+    }
+
+    /// A document taller than the write-out band (128 rows) develops the same at and across
+    /// the band boundaries: the band loop was added to halve the pipeline's peak memory
+    /// ("not enough memory" on a 15 MP tablet document), and a seam would hide there.
+    #[test]
+    fn camera_raw_develops_across_write_band_boundaries() {
+        let mut s = Session::new();
+        s.execute("file.new", json!({"width": 64, "height": 300, "depth": 8})).unwrap();
+        s.execute("layer.new.layer", json!({"name": "field"})).unwrap();
+        s.edit("field", |doc, active| {
+            let surf = doc.layer_mut(active.unwrap()).unwrap().surface_mut().unwrap();
+            let fmt = surf.format();
+            for y in 0..300 {
+                for x in 0..64 {
+                    let v = 0.3 + (x % 16) as f32 / 40.0;
+                    surf.write_pixel(x, y, &photocraft_raster::from_rgba(&fmt, [v, v * 0.85, v * 0.6, 1.0]));
+                }
+            }
+            Ok(())
+        })
+        .unwrap();
+        s.execute(RAW, json!({"exposure": 0.8, "shadows": 30})).unwrap();
+        // The same column, one row apart across every boundary, stays a smooth gradient: a
+        // seam would step. Rows 0, 127|128, 255|256 (band edges) and the last partial band's
+        // edge 299|298.
+        for y in [0usize, 127, 128, 255, 256, 298, 299] {
+            let here = active_px(&s, 32, y as i32);
+            let next = active_px(&s, 32, (y + 1).min(299) as i32);
+            assert!((here[1] - next[1]).abs() < 0.05, "row {y}: {here:?} vs {next:?}");
+            assert!(here[1] > 0.0, "row {y} developed: {here:?}");
+        }
+        // Undo restores the field exactly (the write covered every row).
+        s.undo();
+        assert!((active_px(&s, 32, 150)[1] - 0.255).abs() < 0.02, "restored");
     }
 
     #[test]

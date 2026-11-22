@@ -931,3 +931,31 @@ fn the_native_dock_width_sizes_the_default_column() {
     assert_eq!(columns[0].width, 380.0);
     assert!(h.ctx.data_mut(|data| data.get_persisted::<egui::PanelState>(key)).is_none(), "taken once");
 }
+
+/// The mobile shell's file browser (and anything else that takes the whole frame before the
+/// app) leaves the dock no space. craft-ui reports an unusable rect as
+/// `DockError::InvalidGeometry`, which used to land in the status bar every frame as the sticky
+/// "docking geometry is not finite and bounded" over a file dialog. A frame with no room draws
+/// no dock and reports nothing.
+#[test]
+fn a_frame_with_no_space_reports_no_docking_error() {
+    let mut app = app();
+    app.run("window.panel.float", json!({"panel":"properties","x":50,"y":70,"width":330,"height":410})).unwrap();
+    let mut ready = false;
+    let mut harness = Harness::builder().with_size(vec2(1280.0, 800.0)).with_step_dt(1.0 / 60.0).build_ui_state(
+        move |ui, app: &mut PhotocraftApp| {
+            if !ready {
+                PhotocraftApp::setup_context(ui.ctx(), crate::theme::ThemeKind::ProMedium);
+                ready = true;
+                return;
+            }
+            // The shell's browser takes the whole frame first; the app is left none of it.
+            egui::CentralPanel::default().show(ui, |_| {});
+            let mut starved = ui.new_child(egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(egui::pos2(40.0, 40.0), egui::Vec2::ZERO)));
+            crate::panel_docking::show(app, &mut starved);
+        },
+        app,
+    );
+    harness.run_steps(4);
+    assert!(harness.state().ui.status.is_empty(), "no docking error: {}", harness.state().ui.status);
+}

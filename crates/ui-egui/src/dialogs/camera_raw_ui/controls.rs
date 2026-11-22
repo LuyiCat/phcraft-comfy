@@ -195,13 +195,15 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
         app.ui.status = e;
         app.ui.status_error = true;
     }
-    let Some(d) = app.camera_raw.as_ref() else { return };
-    // Where the platform has no extra windows (the web build), draw over the main window.
-    if ctx.embed_viewports() {
-        draw(app, ctx, false);
+    if app.camera_raw.is_none() || ctx.embed_viewports() {
+        // Where the platform has one window (the web build, a tablet shell) the dialog is the
+        // frame's first panel, drawn from `app::frame` — [`fullscreen`]. The floating layers
+        // the desktop branch shows (a scrim `Area` plus the dialog `Area`) render on Android
+        // yet never hit-test, so under a finger no slider or button would answer; panels and
+        // modals do (the mobile file browser takes the frame the same way, before the app's).
         return;
     }
-    let window_title = d.window_title();
+    let window_title = app.camera_raw.as_ref().map_or_else(String::new, CameraRawDialog::window_title);
     // Camera Raw is modal, as in Photoshop: the main window is dimmed and takes no input while it
     // is open (in a separate window, or drawn over it where there are no extra windows).
     let main = ctx.content_rect();
@@ -221,6 +223,12 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
     if close && app.camera_raw.is_some() {
         cancel(app);
     }
+}
+
+/// The dialog as the frame's first panel, taking the whole screen: the single-window answer to
+/// [`show`]'s own OS window (see `app::frame` for why a panel, not floating layers).
+pub fn fullscreen(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
+    draw(app, ui.ctx(), false);
 }
 
 impl CameraRawDialog {
