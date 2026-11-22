@@ -14,6 +14,9 @@ pub fn body(app: &mut PhotocraftApp, ui: &mut egui::Ui, f: &mut Map<String, Valu
             info.extend(gpu_memory_lines(app));
             f.insert("__gpuInfo".into(), json!(info));
             f.insert("__gpuAdapters".into(), json!(app.perf.gpu_info.adapters));
+            if let Some(values) = f.get_mut("values") {
+                hide_unavailable_integration_fields(app, values);
+            }
             let system = system_theme(app, ui.ctx());
             prefs_body(ui, f, system);
         }
@@ -22,6 +25,23 @@ pub fn body(app: &mut PhotocraftApp, ui: &mut egui::Ui, f: &mut Map<String, Valu
         "presetsIO" => presets_io_body(ui, f),
         "mismatch" => mismatch_body(ui, f),
         _ => {}
+    }
+}
+
+/// Remove integration settings whose transport is absent from this application build. The
+/// release iPad target is deliberately local-only; keeping these rows out of Preferences also
+/// prevents a stale Debug configuration from suggesting that the App Store build accepts an
+/// endpoint or API key. The values remain in the working JSON only when a transport can use them,
+/// so desktop and local/debug builds keep their existing settings.
+pub(super) fn hide_unavailable_integration_fields(app: &PhotocraftApp, values: &mut Value) {
+    if app.session.comfy.transport.is_some() || app.session.comfy.image_api {
+        return;
+    }
+    let Some(fields) = values.get_mut("integrations").and_then(Value::as_object_mut) else {
+        return;
+    };
+    for key in ["comfyUrl", "comfyWorkflowsDir", "imageApiBase", "imageApiKey", "imageApiModel"] {
+        fields.remove(key);
     }
 }
 
@@ -36,8 +56,6 @@ pub(super) fn humanize(key: &str) -> String {
         "automaticallyCheckUpdates" => return "Automatically Check for Updates".into(),
         "comfyUrl" => return "ComfyUI Server URL".into(),
         "comfyWorkflowsDir" => return "ComfyUI Workflows Folder".into(),
-        "comfyAutostart" => return "Start ComfyUI Automatically".into(),
-        "comfyCommand" => return "ComfyUI Launch Command".into(),
         "imageApiBase" => return "Image API Endpoint".into(),
         "imageApiKey" => return "Image API Key".into(),
         "imageApiModel" => return "Image API Model".into(),

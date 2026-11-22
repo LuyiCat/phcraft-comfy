@@ -46,14 +46,26 @@ __attribute__((visibility("default"))) void pc_pick_open(int allow_multiple) {
 // Present the export sheet for a file the shell already staged in the app's tmp directory;
 // the system copies it to the chosen destination (asCopy leaves our staged file alone).
 __attribute__((visibility("default"))) void pc_pick_export(const char *path) {
+    // The Rust caller owns `path` only for this call: it is a pointer into a temporary
+    // CString. Copy it before queueing the UIKit work, otherwise the main-queue block can
+    // dereference freed memory and the Save As sheet silently fails to appear.
+    NSString *pathString = path == NULL ? nil : [NSString stringWithUTF8String:path];
+    if (pathString == nil) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (PCCancelCallback != NULL) PCCancelCallback();
+        });
+        return;
+    }
     dispatch_async(dispatch_get_main_queue(), ^{
         UIViewController *root = PCRootViewController();
-        if (root == nil || path == NULL) {
+        if (root == nil) {
             if (PCCancelCallback != NULL) PCCancelCallback();
             return;
         }
         PCExportMode = YES;
-        NSURL *url = [NSURL fileURLWithPath:[NSString stringWithUTF8String:path]];
+        // Blocks retain captured Objective-C objects under ARC, so this remains valid until
+        // UIDocumentPickerViewController has consumed the URL.
+        NSURL *url = [NSURL fileURLWithPath:pathString];
         UIDocumentPickerViewController *picker =
             [[UIDocumentPickerViewController alloc] initForExportingURLs:@[ url ] asCopy:YES];
         picker.delegate = [PCDocumentPickerDelegate shared];

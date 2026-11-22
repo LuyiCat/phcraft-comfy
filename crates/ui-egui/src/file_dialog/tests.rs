@@ -667,6 +667,33 @@ fn a_save_writes_at_once_when_the_dialog_asked_about_the_file() {
     assert_eq!(*written.borrow(), ["/pics/cat.psd", "/pics/dog.png"]);
 }
 
+/// The iPad shell has no dialog of its own to ask in (`save_dialog_unconfirmed`): an answer that
+/// names an existing file still asks through the app's replace prompt, and Cancel writes nothing.
+#[test]
+fn an_unconfirmed_save_dialog_asks_before_replacing_the_file_it_answered() {
+    let (mut app, open, written) = app();
+    let disk = on_disk(&mut app);
+    app.services.save_dialog_unconfirmed = true;
+    changed_by_another_app(&disk, "/pics/cat.psd");
+    save_as(&mut app, &open, "/pics/cat.psd");
+    let id = replace_prompt(&app).expect("the save asks first");
+    assert!(written.borrow().is_empty(), "nothing is written before the answer");
+    crate::dialogs::cancel(&mut app, id).unwrap();
+    assert!(written.borrow().is_empty() && !app.file_dialog_open());
+
+    // A name with no file under it is written at once: there is nothing to replace.
+    save_as(&mut app, &open, "/pics/new.psd");
+    assert!(replace_prompt(&app).is_none());
+    assert_eq!(*written.borrow(), ["/pics/new.psd"]);
+
+    // Replace writes the file the answer named.
+    save_as(&mut app, &open, "/pics/cat.psd");
+    let id = replace_prompt(&app).expect("the save asks again");
+    crate::dialogs::confirm(&mut app, id).unwrap();
+    assert_eq!(*written.borrow(), ["/pics/new.psd", "/pics/cat.psd"]);
+    assert_eq!(app.session.active().unwrap().path.as_deref(), Some("/pics/cat.psd"));
+}
+
 #[test]
 fn save_and_export_dialogs_start_beside_the_document() {
     let (mut app, open, _) = app();

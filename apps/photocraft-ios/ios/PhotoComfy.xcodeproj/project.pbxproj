@@ -8,12 +8,14 @@
 
 /* Begin PBXBuildFile section */
 		AA2C00010000000000000012 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA2C0001000000000000000E /* Assets.xcassets */; };
+		AA2C00010000000000000013 /* PhotoComfyStub.m in Sources */ = {isa = PBXBuildFile; fileRef = AA2C00010000000000000014 /* PhotoComfyStub.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		AA2C0001000000000000000C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.info; name = Info.plist; path = PhotoComfy/Info.plist; sourceTree = "<group>"; };
 		AA2C0001000000000000000D /* PhotoComfy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PhotoComfy.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA2C0001000000000000000E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = PhotoComfy/Assets.xcassets; sourceTree = "<group>"; };
+		AA2C00010000000000000014 /* PhotoComfyStub.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = PhotoComfyStub.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -32,6 +34,7 @@
 			children = (
 				AA2C0001000000000000000E /* Assets.xcassets */,
 				AA2C0001000000000000000C /* Info.plist */,
+				AA2C00010000000000000014 /* PhotoComfyStub.m */,
 				AA2C0001000000000000000B /* Products */,
 			);
 			sourceTree = "<group>";
@@ -140,6 +143,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA2C00010000000000000013 /* PhotoComfyStub.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -200,6 +204,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = V9F6BSTSND;
+				PHOTOCOMFY_DISABLE_AIGC = NO;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = PhotoComfy/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
@@ -228,6 +233,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = V9F6BSTSND;
+				PHOTOCOMFY_DISABLE_AIGC = NO;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = PhotoComfy/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;

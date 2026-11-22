@@ -31,14 +31,29 @@ case "$PLATFORM" in
 esac
 PROFILE="${PROFILE:-release}"
 
-# Xcode's script phases run with a minimal PATH: cargo may live in ~/.cargo/bin, or be managed
-# by Homebrew, rustup's own layout, mise or asdf — probe the usual homes instead of failing.
+# Xcode's script phases run with a minimal PATH — and can arrive without a usable HOME, which
+# breaks both the probe below and rustup itself (the cargo shim resolves ~/.cargo and ~/.rustup
+# through HOME). Restore HOME from the account database before anything else needs it.
+if [ -z "${HOME:-}" ] || [ ! -d "$HOME" ]; then
+    account_home="$(dscl . -read "/Users/$(id -un 2>/dev/null)" NFSHomeDirectory 2>/dev/null | awk '{ print $2 }')"
+    if [ -n "$account_home" ] && [ -d "$account_home" ]; then
+        HOME="$account_home"
+        echo "note: HOME was unset or missing; using the account home $HOME"
+    fi
+fi
+HOME="${HOME:-}"
+export HOME
+
+# cargo may be on PATH, in ~/.cargo/bin, or managed by Homebrew, rustup's own layout, mise or
+# asdf — probe the usual homes instead of failing. /Users/*/.cargo/bin is the last resort for
+# environments whose HOME points somewhere other than the real account home.
 find_cargo() {
     if command -v cargo >/dev/null 2>&1; then
         command -v cargo
         return 0
     fi
-    for candidate in "$HOME/.cargo/bin" /opt/homebrew/bin /usr/local/bin "$HOME/.local/bin" "$HOME/.rustup/toolchains"/*/bin "$HOME/.cargo"/*/bin; do
+    for candidate in "$HOME/.cargo/bin" /opt/homebrew/bin /usr/local/bin "$HOME/.local/bin" \
+        "$HOME/.rustup/toolchains"/*/bin "$HOME/.cargo"/*/bin /Users/*/.cargo/bin; do
         if [ -x "$candidate/cargo" ]; then
             echo "$candidate/cargo"
             return 0
@@ -51,6 +66,10 @@ CARGO="$(find_cargo)" || {
     echo "error: cargo not found. Xcode's script phase runs with a minimal PATH; install Rust" \
         "with rustup (https://rustup.rs), or add its bin directory to this script's search" \
         "list (apps/photocraft-ios/ios/build.sh find_cargo)." >&2
+    echo "diagnostics: HOME='$HOME' USER='${USER:-<unset>}' PATH='$PATH'" >&2
+    for candidate in "$HOME/.cargo/bin" /opt/homebrew/bin /usr/local/bin /Users/*/.cargo/bin; do
+        ls -ld "$candidate/cargo" >&2 2>/dev/null || echo "  no cargo in $candidate" >&2
+    done
     exit 1
 }
 export PATH="$(dirname "$CARGO"):$PATH"
@@ -70,11 +89,6 @@ esac
 REPO="$(cd "$(dirname "$0")/../../.." && pwd)"
 cd "$REPO"
 
-# Keep iOS intermediates out of the desktop and Android target trees. Xcode and CI can export
-# CARGO_TARGET_DIR, but reusing that directory makes the bundle step pick up another platform's
-# binary (or makes Cargo write the binary where the fixed path below cannot find it).
-export CARGO_TARGET_DIR="$REPO/target/ios"
-
 # Embed the craft-fonts faces like a desktop build (docs/development.md › Fonts): iPadOS, unlike
 # macOS, lets no app read the system font files, so without these the UI's Chinese and other
 # script text has no glyphs to fall back to. The documented sibling checkout is picked up
@@ -84,12 +98,18 @@ if [ -z "${CRAFT_FONTS_DIR:-}" ] && [ -d "$REPO/../craft-fonts/fonts" ]; then
     export CRAFT_FONTS_DIR
 fi
 
-echo "building PhotoComfy for $TARGET ($PROFILE)…"
+echo "building photocraft-ios for $TARGET ($PROFILE)…"
 # --offline keeps cargo from a network round-trip on every Xcode Run; the fingerprint check
 # below makes repeats cheap, and an actually-needed dependency update is a deliberate act.
-cargo build --profile "$PROFILE" --target "$TARGET" --offline -p photocraft-ios
+if [ "${PHOTOCOMFY_DISABLE_AIGC:-NO}" = "YES" ]; then
+    echo "AIGC transport: disabled (explicit override)"
+    cargo build --profile "$PROFILE" --target "$TARGET" --offline --no-default-features --features heif -p photocraft-ios
+else
+    echo "AIGC transport: enabled"
+    cargo build --profile "$PROFILE" --target "$TARGET" --offline --features heif -p photocraft-ios
+fi
 
-BIN="$CARGO_TARGET_DIR/$TARGET/$PROFILE/photocraft-ios"
+BIN="target/$TARGET/$PROFILE/photocraft-ios"
 if [ ! -f "$BIN" ]; then
     echo "error: cargo produced no binary at $BIN" >&2
     exit 1
@@ -104,8 +124,8 @@ cp "$BIN" "$APP/$PRODUCT"
 if [ ! -f "$APP/Info.plist" ]; then
     sed -e "s/\$(EXECUTABLE_NAME)/$PRODUCT/" \
         -e "s/\$(PRODUCT_BUNDLE_IDENTIFIER)/photocomfy/" \
-        -e "s/$(MARKETING_VERSION)/1.0.3/" \
-        -e "s/$(CURRENT_PROJECT_VERSION)/4/" \
+        -e "s/\$(MARKETING_VERSION)/1.0.3/" \
+        -e "s/\$(CURRENT_PROJECT_VERSION)/4/" \
         "$(dirname "$0")/PhotoComfy/Info.plist" > "$APP/Info.plist"
     printf 'APPL????' > "$APP/PkgInfo"
 fi

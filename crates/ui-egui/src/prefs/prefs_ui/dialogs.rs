@@ -91,7 +91,27 @@ pub(super) fn preference_values(p: &prefs::Preferences) -> Map<String, Value> {
 
 /// Compare the editable sections, excluding settings managed outside Preferences.
 pub fn preferences_changed(app: &PhotocraftApp, fields: &Map<String, Value>) -> bool {
-    is_preferences(fields) && fields.get("values").and_then(Value::as_object).is_some_and(|values| *values != preference_values(app.session.prefs()))
+    if !is_preferences(fields) {
+        return false;
+    }
+    let Some(values) = fields.get("values").and_then(Value::as_object) else {
+        return false;
+    };
+    let mut draft = values.clone();
+    // Local-only builds omit remote generation rows from the draft for display. Put those stored
+    // values back into the comparison so their absence does not keep Apply enabled forever.
+    if app.session.comfy.transport.is_none()
+        && !app.session.comfy.image_api
+        && let Some(current) = preference_values(app.session.prefs()).get("integrations").and_then(Value::as_object)
+        && let Some(integrations) = draft.get_mut("integrations").and_then(Value::as_object_mut)
+    {
+        for key in ["comfyUrl", "comfyWorkflowsDir", "imageApiBase", "imageApiKey", "imageApiModel"] {
+            if let Some(value) = current.get(key) {
+                integrations.entry(key.to_string()).or_insert_with(|| value.clone());
+            }
+        }
+    }
+    draft != preference_values(app.session.prefs())
 }
 
 /// Commit the working copy and keep the current section open. Failure leaves the draft intact.

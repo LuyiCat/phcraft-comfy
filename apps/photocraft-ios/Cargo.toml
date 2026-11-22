@@ -1,6 +1,6 @@
 [package]
 name = "photocraft-ios"
-description = "PhotoComfy for iPadOS (eframe native runner, Metal, touch UI)"
+description = "PhotoCraft for iPadOS (eframe native runner, Metal, touch UI)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,8 +8,13 @@ publish = false
 build = "build.rs"
 
 [features]
-# Open HEIC/HEIF photos (the optional photocraft-heif crate). Not default so distributors choose
-# it; official builds (CI, packaging/, release) build with `--features heif`.
+# Local/debug builds keep the Image API enabled. The App Store Release configuration
+# passes `--no-default-features`, which removes the PhotoComfy Image API transport.
+default = ["aigc"]
+aigc = ["dep:ureq"]
+
+# Open HEIC/HEIF photos (the optional photocraft-heif crate). Not a Cargo default; the iOS build
+# script and official desktop builds opt in with `--features heif`.
 heif = ["photocraft-codecs/heif"]
 
 # The workspace lints, except `unsafe_code = "forbid"`: src/picker.rs copies the (name, bytes)
@@ -44,7 +49,7 @@ egui = { workspace = true }
 log = { workspace = true }
 # The Image API transport (src/api_gen.rs): like the desktop app's ComfyUI client, but with TLS —
 # the endpoints are remote and https. MIT/Apache-2.0, inside the licence allowlist.
-ureq = { version = "3.5", default-features = false, features = ["json", "multipart", "rustls"] }
+ureq = { version = "3.5", optional = true, default-features = false, features = ["json", "multipart", "rustls"] }
 
 [target.'cfg(target_os = "ios")'.dependencies]
 # The system locale, for the interface language and the CJK script default (`PHOTOCRAFT_LOCALE`;
