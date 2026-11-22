@@ -31,6 +31,9 @@ pub enum FileDialogRequest {
     Folder { initial_dir: Option<String> },
     /// Where to write, starting from `suggested` (a file name, or the document's own path).
     Save { suggested: String },
+    /// Save As on a shell that must ask the system for a user-chosen destination (iPadOS).
+    /// Other shells present their ordinary save dialog, exactly as for [`Self::Save`].
+    SaveLocation { suggested: String },
 }
 
 /// The user's choice (a cancelled dialog answers `None`).
@@ -94,6 +97,8 @@ pub(crate) struct Pending {
     /// The save dialog's answer while the app asks whether to replace the file it writes to
     /// (`replace_prompt`).
     held: Option<FileDialogAnswer>,
+    /// A system save-location picker already asked in its own UI; don't ask Replace again.
+    confirmed_save_location: bool,
 }
 
 /// The error of a cancelled dialog: not reported, since backing out is the user's choice.
@@ -123,14 +128,15 @@ impl PhotocraftApp {
         let kind = match request {
             FileDialogRequest::Open { .. } => "open",
             FileDialogRequest::Folder { .. } => "folder",
-            FileDialogRequest::Save { .. } => "save",
+            FileDialogRequest::Save { .. } | FileDialogRequest::SaveLocation { .. } => "save",
         };
         let then: Then = Box::new(move |app, answer| match answer {
             None => Err(CANCELLED.into()),
             Some(FileDialogAnswer::Unavailable(why)) => Err(why),
             Some(a) => then(app, a),
         });
-        self.file_dialog = Some(Pending { request: Some(request), answer: None, then, saved_path: None, held: None });
+        let confirmed_save_location = matches!(request, FileDialogRequest::SaveLocation { .. });
+        self.file_dialog = Some(Pending { request: Some(request), answer: None, then, saved_path: None, held: None, confirmed_save_location });
         Ok(json!({ "fileDialog": kind }))
     }
 
@@ -154,6 +160,17 @@ impl PhotocraftApp {
     /// (#1826, #1866). A caller's explicit directory is kept. The chosen folder is remembered for
     /// the document the dialog was asked for.
     pub(crate) fn pick_save(&mut self, suggested: &str, then: impl FnOnce(&mut Self, String) -> Result<Value, String> + 'static) -> Result<Value, String> {
+        self.pick_save_with(suggested, false, then)
+    }
+
+    /// [`Self::pick_save`]. `system_location` marks File › Save As on a shell whose save panel is
+    /// the system document picker (iPadOS); the save itself still continues through `then`.
+    pub(crate) fn pick_save_with(
+        &mut self,
+        suggested: &str,
+        system_location: bool,
+        then: impl FnOnce(&mut Self, String) -> Result<Value, String> + 'static,
+    ) -> Result<Value, String> {
         let mut suggested = std::path::PathBuf::from(suggested);
         let doc = self.session.active().map(|d| d.doc.id);
         // Closed documents' folders are no longer needed.
@@ -171,7 +188,10 @@ impl PhotocraftApp {
         // Save As appends the extension of the chosen file type.
         let suggested_ext = suggested.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase());
         let ext = suggested_ext.clone();
-        let asked = self.ask_file(FileDialogRequest::Save { suggested: suggested.to_string_lossy().into_owned() }, move |app, answer| match answer {
+        let suggested = suggested.to_string_lossy().into_owned();
+        let request =
+            if system_location && cfg!(target_os = "ios") { FileDialogRequest::SaveLocation { suggested } } else { FileDialogRequest::Save { suggested } };
+        let asked = self.ask_file(request, move |app, answer| match answer {
             FileDialogAnswer::SaveTo(path) => {
                 let path = saved_path(app, &path, suggested_ext.as_deref());
                 // The web answers a download name, which has no folder to remember.
@@ -344,6 +364,7 @@ impl PhotocraftApp {
             Some(Err(TryRecvError::Disconnected)) | None => None,
         };
         if let Some(FileDialogAnswer::SaveTo(answered)) = &answer
+            && !self.file_dialog.as_ref().is_some_and(|p| p.confirmed_save_location)
             && let Some(path) = self.file_dialog.as_ref().and_then(|p| p.saved_path.as_ref()).map(|written| written(self, answered))
             && self.replaces_unasked(answered, &path)
         {

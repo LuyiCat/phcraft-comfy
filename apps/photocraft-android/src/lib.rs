@@ -301,7 +301,7 @@ mod shell {
                 FileDialogRequest::Open { multiple, initial_dir, extensions, .. } => browser.begin_open(multiple, initial_dir, extensions, reply),
                 // Folder pickers have no browser counterpart (as on the web): back out.
                 FileDialogRequest::Folder { .. } => reply.send(None),
-                FileDialogRequest::Save { suggested } => browser.begin_save(suggested, reply),
+                FileDialogRequest::Save { suggested } | FileDialogRequest::SaveLocation { suggested } => browser.begin_save(suggested, reply),
             })),
             write: Some(Box::new(|path: &str, bytes: &[u8]| write_atomic(path, bytes))),
             file_stamp: Some(Box::new(|path: &str| std::fs::metadata(path).ok().map(|m| FileStamp { len: m.len(), modified: m.modified().ok() }))),

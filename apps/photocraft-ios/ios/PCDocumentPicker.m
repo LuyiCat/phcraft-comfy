@@ -2,8 +2,8 @@
 // The delegates live here, not in Rust, because implementing an ObjC protocol needs objc2's
 // declare_class! (unsafe); everything UIKit stays in this file, force-linked like
 // PCSceneDelegate.m. Open picks are read inside the delegate (security scope) and delivered
-// as (name, bytes) callbacks; the export sheet copies an already-staged file to wherever the
-// user picks. Mode is tracked so an export's didPick is not mistaken for an open.
+// as (name, bytes) callbacks; Save As exports an empty staging file and reports the picked
+// destination back to Rust. Mode is tracked so an export's didPick is not mistaken for an open.
 #import <UIKit/UIKit.h>
 
 typedef void (*pc_open_cb)(const char *name, const uint8_t *bytes, size_t len, int last);
@@ -21,9 +21,89 @@ static pc_open_cb PCOpenCallback;
 static pc_cancel_cb PCCancelCallback;
 static BOOL PCExportMode;
 
+// Save As destinations live outside the app sandbox. Keep bookmarks for them so File ▸ Save
+// can regain the picker-granted access after a relaunch while iOS's implicit scope is valid.
+static NSMutableDictionary<NSString *, NSData *> *PCBookmarkData;
+static NSMutableDictionary<NSString *, NSURL *> *PCScopedURLs;
+
+static NSURL *PCBookmarkStoreURL(void) {
+    NSURL *base = [[NSFileManager defaultManager] URLsForDirectory:NSApplicationSupportDirectory
+                                                         inDomains:NSUserDomainMask].firstObject;
+    if (base == nil) return nil;
+    NSURL *dir = [base URLByAppendingPathComponent:@"PhotoComfy" isDirectory:YES];
+    [[NSFileManager defaultManager] createDirectoryAtURL:dir
+                             withIntermediateDirectories:YES
+                                              attributes:nil
+                                                   error:nil];
+    return [dir URLByAppendingPathComponent:@"external-bookmarks.plist"];
+}
+
+static void PCSaveBookmarks(void) {
+    NSURL *url = PCBookmarkStoreURL();
+    if (url == nil || PCBookmarkData == nil) return;
+    [[NSDictionary dictionaryWithDictionary:PCBookmarkData] writeToURL:url atomically:YES];
+}
+
+static void PCLoadBookmarks(void) {
+    PCBookmarkData = [NSMutableDictionary dictionary];
+    PCScopedURLs = [NSMutableDictionary dictionary];
+    NSURL *store = PCBookmarkStoreURL();
+    NSDictionary *raw = store == nil ? nil : [NSDictionary dictionaryWithContentsOfURL:store];
+    BOOL changed = NO;
+    for (NSString *path in raw) {
+        NSData *data = raw[path];
+        if (![path isKindOfClass:NSString.class] || ![data isKindOfClass:NSData.class]) {
+            changed = YES;
+            continue;
+        }
+        BOOL stale = NO;
+        NSError *error = nil;
+        NSURL *url = [NSURL URLByResolvingBookmarkData:data
+                                               options:NSURLBookmarkResolutionWithoutUI |
+                                                        NSURLBookmarkResolutionWithoutImplicitStartAccessing
+                                         relativeToURL:nil
+                                  bookmarkDataIsStale:&stale
+                                                 error:&error];
+        if (url == nil || ![url startAccessingSecurityScopedResource]) {
+            changed = YES;
+            continue;
+        }
+        PCScopedURLs[path] = url;
+        if (stale) {
+            NSData *fresh = [url bookmarkDataWithOptions:NSURLBookmarkCreationMinimalBookmark
+                          includingResourceValuesForKeys:nil
+                                           relativeToURL:nil
+                                                   error:nil];
+            if (fresh != nil) PCBookmarkData[path] = fresh;
+            changed = YES;
+        } else {
+            PCBookmarkData[path] = data;
+        }
+    }
+    if (changed) PCSaveBookmarks();
+}
+
+static void PCRememberDestination(NSURL *url) {
+    NSString *path = url.path;
+    if (path == nil) return;
+    // The access intentionally stays active for the process; the retained URL keeps the
+    // picker grant alive, and the bookmark restores it on the next launch.
+    if (![url startAccessingSecurityScopedResource]) return;
+    PCScopedURLs[path] = url;
+    NSData *data = [url bookmarkDataWithOptions:NSURLBookmarkCreationMinimalBookmark
+                 includingResourceValuesForKeys:nil
+                                  relativeToURL:nil
+                                          error:nil];
+    if (data != nil) {
+        PCBookmarkData[path] = data;
+        PCSaveBookmarks();
+    }
+}
+
 __attribute__((visibility("default"))) void pc_set_callbacks(pc_open_cb open, pc_cancel_cb cancel) {
     PCOpenCallback = open;
     PCCancelCallback = cancel;
+    PCLoadBookmarks();
 }
 
 __attribute__((visibility("default"))) void pc_pick_open(int allow_multiple) {
@@ -44,7 +124,8 @@ __attribute__((visibility("default"))) void pc_pick_open(int allow_multiple) {
 }
 
 // Present the export sheet for a file the shell has already written; the system copies it to
-// the chosen destination (asCopy leaves our file alone).
+// the chosen destination (asCopy leaves our file alone). Save As stages an empty placeholder
+// through the same path and reads the picked destination from the delegate callback.
 __attribute__((visibility("default"))) void pc_pick_export(const char *path) {
     // Copy the path BEFORE dispatching. The Rust caller frees its CString when the call
     // returns, and the block below runs on a later main-queue turn: capturing the raw pointer
@@ -73,7 +154,7 @@ __attribute__((visibility("default"))) void pc_pick_export(const char *path) {
 // window of the first connected window scene (the one PCSceneDelegate attached).
 static UIViewController *PCRootViewController(void) {
     for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
-        if (![scene isKindOfClass:[UIWindowScene class]]) continue;
+        if (![scene isKindOfClass:UIWindowScene.class]) continue;
         UIWindowScene *windowScene = (UIWindowScene *)scene;
         if (windowScene.keyWindow.rootViewController != nil) {
             return windowScene.keyWindow.rootViewController;
@@ -98,8 +179,16 @@ static PCDocumentPickerDelegate *PCSharedDelegate;
     didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
     [controller dismissViewControllerAnimated:YES completion:nil];
     if (PCExportMode) {
-        // The system copied the staged file to the picked destination; nothing to read back
-        // (the shell's `write_unconfirmed` covers the user backing out instead).
+        // Save As needs the real destination path: the system has copied the staged
+        // placeholder there, and the app overwrites that copy with the document bytes.
+        NSURL *url = urls.firstObject;
+        if (url != nil) {
+            PCRememberDestination(url);
+            NSString *path = url.path ?: @"";
+            if (PCOpenCallback != NULL) PCOpenCallback(path.UTF8String, NULL, 0, 1);
+        } else if (PCOpenCallback != NULL) {
+            PCOpenCallback("", NULL, 0, 1);
+        }
         return;
     }
     NSUInteger last = urls.count - 1;
@@ -121,7 +210,7 @@ static PCDocumentPickerDelegate *PCSharedDelegate;
 
 - (void)documentPickerWasCancelled:(UIDocumentPickerViewController *)controller {
     [controller dismissViewControllerAnimated:YES completion:nil];
-    if (!PCExportMode && PCCancelCallback != NULL) PCCancelCallback();
+    if (PCCancelCallback != NULL) PCCancelCallback();
 }
 
 @end

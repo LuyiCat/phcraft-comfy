@@ -531,7 +531,7 @@ fn services(inbox: Inbox, place_inbox: PlaceInbox, cursor_pos: photocraft_ui_egu
             // Browser folder handles cannot be represented as filesystem paths for engine commands.
             FileDialogRequest::Folder { .. } => reply.send(None),
             // No save dialog on the web: the suggested name becomes the download name.
-            FileDialogRequest::Save { suggested } => {
+            FileDialogRequest::Save { suggested } | FileDialogRequest::SaveLocation { suggested } => {
                 let name = std::path::Path::new(&suggested).file_name().map_or_else(|| suggested.clone(), |n| n.to_string_lossy().to_string());
                 reply.send(Some(FileDialogAnswer::SaveTo(name)));
             }

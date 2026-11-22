@@ -26,6 +26,14 @@ pub fn open(multiple: bool, reply: FileDialogReply) {
     real::open(multiple, reply);
 }
 
+/// File ▸ Save As on iPadOS: present the system export picker for the suggested name, and
+/// answer with the real destination path the delegate reports. File ▸ Save does not use this;
+/// it keeps writing the app's Documents path through the ordinary `Save` request.
+#[cfg(target_os = "ios")]
+pub fn save_location(suggested: &str, reply: FileDialogReply) {
+    real::save_location(suggested, reply);
+}
+
 /// Present the export sheet for a file (the bridge for a copy-out command; a Save no longer
 /// stages a tmp file, it writes Documents directly, see `main.rs`).
 #[cfg(target_os = "ios")]
@@ -35,11 +43,12 @@ pub fn export(path: &std::path::Path) {
 }
 
 #[cfg(not(target_os = "ios"))]
-pub use stubs::{install, open};
+pub use stubs::{install, open, save_location};
 
 #[cfg(target_os = "ios")]
 mod real {
     use std::ffi::{CString, c_char, c_int, c_uchar};
+    use std::path::PathBuf;
     use std::sync::{Mutex, PoisonError};
 
     use photocraft_ui_egui::{FileDialogAnswer, FileDialogReply};
@@ -54,10 +63,13 @@ mod real {
 
     /// The dialog the app started and is waiting on: the answer channel plus the files the
     /// delegate has delivered so far (multi-select delivers one callback per file, `last` flags
-    /// the end).
+    /// the end). Save As also remembers the empty staging file the system picker exports and
+    /// the destination path callback's name field.
     struct Pending {
         reply: Option<FileDialogReply>,
         files: Vec<(String, Vec<u8>)>,
+        last_name: String,
+        staging: Option<PathBuf>,
     }
 
     static PENDING: Mutex<Option<Pending>> = Mutex::new(None);
@@ -67,8 +79,37 @@ mod real {
     }
 
     pub fn open(multiple: bool, reply: FileDialogReply) {
-        *PENDING.lock().unwrap_or_else(PoisonError::into_inner) = Some(Pending { reply: Some(reply), files: Vec::new() });
+        *PENDING.lock().unwrap_or_else(PoisonError::into_inner) =
+            Some(Pending { reply: Some(reply), files: Vec::new(), last_name: String::new(), staging: None });
         pc_pick_open(c_int::from(multiple));
+    }
+
+    pub fn save_location(suggested: &str, reply: FileDialogReply) {
+        let name = std::path::Path::new(suggested).file_name().map(|n| n.to_string_lossy().into_owned()).filter(|n| !n.is_empty());
+        let Some(name) = name else {
+            reply.send(None);
+            return;
+        };
+        // UIKit's export initializer requires an existing file. Its contents are irrelevant:
+        // the system copies this placeholder to the chosen destination, then the app's normal
+        // save flow overwrites that destination with the real bytes.
+        let dir = std::env::temp_dir().join("photocomfy-save-as");
+        if std::fs::create_dir_all(&dir).is_err() {
+            reply.send(None);
+            return;
+        }
+        let staging = dir.join(name);
+        if std::fs::File::create(&staging).is_err() {
+            reply.send(None);
+            return;
+        }
+        let Ok(path) = CString::new(staging.to_string_lossy().as_bytes()) else {
+            reply.send(None);
+            return;
+        };
+        *PENDING.lock().unwrap_or_else(PoisonError::into_inner) =
+            Some(Pending { reply: Some(reply), files: Vec::new(), last_name: String::new(), staging: Some(staging) });
+        pc_pick_export(path.as_ptr());
     }
 
     /// Present the export sheet for a file the `write` service already staged (see `main.rs`).
@@ -87,14 +128,21 @@ mod real {
         let data = if bytes.is_null() || len == 0 { Vec::new() } else { unsafe { std::slice::from_raw_parts(bytes, len) }.to_vec() };
         let mut guard = PENDING.lock().unwrap_or_else(PoisonError::into_inner);
         let Some(pending) = guard.as_mut() else { return };
+        pending.last_name = name.clone();
         if !data.is_empty() {
             pending.files.push((name, data));
         }
         if last != 0 {
             let Some(mut done) = guard.take() else { return };
+            if let Some(staging) = done.staging.take() {
+                let _ = std::fs::remove_file(staging);
+            }
             if let Some(reply) = done.reply.take() {
                 let answer = match done.files.len() {
-                    0 => None, // opened nothing readable: cancelled, not an error
+                    // An export picker reports its destination as a name with no bytes; an open
+                    // picker reports an unreadable selection as an empty name, which stays Cancel.
+                    0 if !done.last_name.is_empty() => Some(FileDialogAnswer::SaveTo(done.last_name.clone())),
+                    0 => None,
                     1 => Some(FileDialogAnswer::Contents(done.files[0].0.clone(), std::mem::take(&mut done.files[0].1))),
                     _ => Some(FileDialogAnswer::ContentsMany(std::mem::take(&mut done.files))),
                 };
@@ -105,10 +153,13 @@ mod real {
 
     extern "C" fn on_cancel() {
         let mut guard = PENDING.lock().unwrap_or_else(PoisonError::into_inner);
-        if let Some(pending) = guard.as_mut()
-            && let Some(reply) = pending.reply.take()
-        {
-            reply.send(None);
+        if let Some(pending) = guard.as_mut() {
+            if let Some(staging) = pending.staging.take() {
+                let _ = std::fs::remove_file(staging);
+            }
+            if let Some(reply) = pending.reply.take() {
+                reply.send(None);
+            }
         }
         *guard = None;
     }
@@ -122,6 +173,9 @@ mod stubs {
 
     /// No picker off-device: the reply drops unanswered, which the app reads as Cancel.
     pub fn open(_multiple: bool, _reply: FileDialogReply) {}
+
+    /// The Save As location picker is likewise iOS-only in the shell's services.
+    pub fn save_location(_suggested: &str, _reply: FileDialogReply) {}
 
     #[allow(dead_code)]
     pub fn export(_path: &std::path::Path) {}

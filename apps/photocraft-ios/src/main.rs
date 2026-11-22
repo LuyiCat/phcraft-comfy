@@ -536,6 +536,9 @@ fn services_in(documents: Option<PathBuf>) -> Services {
                 };
                 reply.send(Some(FileDialogAnswer::SaveTo(path)));
             }
+            // Save As asks the system for the destination; ordinary Save keeps the app's
+            // Documents path above, so it still writes back in place.
+            FileDialogRequest::SaveLocation { suggested } => picker::save_location(&suggested, reply),
         })),
         write: Some(Box::new(|path: &str, bytes: &[u8]| write_atomic(path, bytes))),
         file_stamp: Some(Box::new(|path: &str| {

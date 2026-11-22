@@ -65,12 +65,12 @@ press Run again to re-sign. See `docs/development.md` for the full walkthrough.
 File ▸ Open presents the system document picker (`ios/PCDocumentPicker.m`, driven from safe
 Rust through the C ABI in `src/picker.rs`; the picker reads the files — security scope and
 all — inside its delegate and hands `(name, bytes)` to the shell, which answers the app's
-pending dialog with the contents). Save answers at once with the suggested name (the web
-download's shape) and `write` stages the bytes in tmp and presents the export sheet that
-copies them wherever the user picks — so `write_unconfirmed` stays true: cancelling the
-sheet saved nothing, and the document honestly stays marked unsaved (#4962 semantics).
-Folder pickers are not offered (as on the web). `src/picker.rs` holds this crate's only
-unsafe: the pointer reads that copy the callback's bytes across the ABI.
+pending dialog with the contents). File ▸ Save writes the document's real file in the app's
+Documents folder (Files › On My iPad › PhotoComfy), so it saves back in place and appears in
+Open Recent. File ▸ Save As first presents the system file picker for a destination; the
+delegate returns that real path, the normal save flow writes it, and the picker grant is
+kept for later saves. Folder pickers are not offered (as on the web). `src/picker.rs` holds
+this crate's only unsafe: the pointer reads that copy the callback's bytes across the ABI.
 
 Apple Pencil pressure/tilt arrives through winit's iOS touch events and the stylus feed, like
 a pen on the desktop.
