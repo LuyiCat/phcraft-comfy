@@ -7,7 +7,9 @@
 #
 # PROFILE selects the Cargo profile, release by default (debug: PROFILE=debug). The SDK lives
 # in ANDROID_HOME or ~/Library/Android/sdk and needs cmdline-tools, one NDK, build-tools and a
-# platforms;android-* package (see README › Build); the signing key is generated on first run.
+# platforms;android-* package (see README › Build). The default signing key is generated on
+# first run; official releases point PHOTOCOMFY_ANDROID_KEYSTORE at the fixed release keystore
+# and carry its passwords through PHOTOCOMFY_ANDROID_KEYSTORE_PASS / PHOTOCOMFY_ANDROID_KEY_PASS.
 set -eu
 
 OUT_DIR="${1:-out/android}"
@@ -92,6 +94,8 @@ fi
 
 VERSION="$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)"
 [ -n "$VERSION" ] || VERSION="0.0.0"
+# The store build number: raise by one for every release, never reuse or rewind it.
+VERSION_CODE="${VERSION_CODE:-2}"
 
 echo "building lib${LIB}.so for $TARGET ($PROFILE)…"
 cargo ndk -t "$ABI" -P "$API" build --profile "$PROFILE" -p photocraft-android
@@ -115,7 +119,7 @@ cp "$SO" "$WORK/pkg/lib/$ABI/"
     --manifest "$(dirname "$0")/AndroidManifest.xml" \
     --min-sdk-version "$API" \
     --target-sdk-version "$API_TARGET" \
-    --version-code 1 \
+    --version-code "$VERSION_CODE" \
     --version-name "$VERSION" \
     -o "$WORK/base.apk"
 # extractNativeLibs="true" in the manifest, so the library may ride compressed in the zip.
@@ -124,20 +128,29 @@ cd "$REPO"
 
 "$BT/zipalign" -f 4 "$WORK/base.apk" "$WORK/aligned.apk"
 
-# A local signing key, generated once: Android has no provisioning-profile expiry — teammates
-# install the APK and keep it. Keep the keystore to sign updates with the same identity, or
-# Android makes everyone uninstall first.
+# The default path is a local development key generated on first run: Android has no
+# provisioning-profile expiry — teammates install the APK and keep it. Releases must instead
+# point PHOTOCOMFY_ANDROID_KEYSTORE at the fixed release keystore backed up outside the repo,
+# or every update after a rebuilt identity forces an uninstall first.
 KEYSTORE="${PHOTOCOMFY_ANDROID_KEYSTORE:-$REPO/target/android/debug.keystore}"
-mkdir -p "$(dirname "$KEYSTORE")"
+STORE_PASS="${PHOTOCOMFY_ANDROID_KEYSTORE_PASS:-android}"
+KEY_PASS="${PHOTOCOMFY_ANDROID_KEY_PASS:-$STORE_PASS}"
 if [ ! -f "$KEYSTORE" ]; then
-    echo "generating a signing key at $KEYSTORE (storepass/keypass 'android')…"
-    keytool -genkeypair -keystore "$KEYSTORE" -storepass android -keypass android \
-        -alias photocomfy -keyalg RSA -keysize 2048 -validity 10000 \
-        -dname "CN=PhotoComfy Team, O=PhotoComfy, C=US"
+    if [ "$KEYSTORE" = "$REPO/target/android/debug.keystore" ]; then
+        mkdir -p "$(dirname "$KEYSTORE")"
+        echo "generating a signing key at $KEYSTORE (storepass/keypass 'android')…"
+        keytool -genkeypair -keystore "$KEYSTORE" -storepass "$STORE_PASS" -keypass "$KEY_PASS" \
+            -alias photocomfy -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=PhotoComfy Team, O=PhotoComfy, C=US"
+    else
+        echo "error: signing keystore $KEYSTORE not found. Point PHOTOCOMFY_ANDROID_KEYSTORE" \
+            "at the existing release keystore, or unset it to build with a local development key." >&2
+        exit 1
+    fi
 fi
 
 APK="$OUT_DIR/PhotoComfy.apk"
-"$BT/apksigner" sign --ks "$KEYSTORE" --ks-pass pass:android --key-pass pass:android \
+"$BT/apksigner" sign --ks "$KEYSTORE" --ks-pass "pass:$STORE_PASS" --key-pass "pass:$KEY_PASS" \
     --ks-key-alias photocomfy --out "$APK" "$WORK/aligned.apk"
 "$BT/apksigner" verify "$APK"
 echo "installed $(wc -c < "$APK" | tr -d ' ') bytes into $APK ($(basename "$NDK") + build-tools $(basename "$BT"))"
