@@ -27,13 +27,13 @@ pub mod clip_line_ui;
 mod color;
 pub mod color_hud;
 pub mod color_panel_ui;
+pub mod comfy_panel;
+#[cfg(test)]
+mod comfy_panel_tests;
 pub mod comps_ui;
 pub mod doc_props_ui;
 mod dock;
 pub mod histogram_panel;
-pub mod comfy_panel;
-#[cfg(test)]
-mod comfy_panel_tests;
 mod history;
 pub mod history_menu_ui;
 pub(crate) mod info;

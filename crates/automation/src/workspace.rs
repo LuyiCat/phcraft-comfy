@@ -435,7 +435,9 @@ fn params_contain_ambient_path(id: &str, params: &Value) -> bool {
         | "layer.smartObjects.editContents"
         | "layer.smartObjects.convertToLayers"
         | "layer.smartObjects.exportSvg"
-        | "layer.smartObjects.updateSvg" => &["path"],
+        | "layer.smartObjects.updateSvg"
+        | "ai.comfyui.save"
+        | "ai.comfyui.workflows.import" => &["path"],
         "image.mode.rgb" | "image.mode.grayscale" | "image.mode.cmyk" | "image.mode.lab" => &["profile"],
         "edit.assignProfile" | "edit.convertToProfile" | "edit.profileInfo" | "view.proofSetup" | "view.gamutWarning" => &["profile"],
         // New Document's Color Profile (#321) can name an .icc file.

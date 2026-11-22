@@ -37,7 +37,7 @@ pub use stubs::{export, install, open};
 
 #[cfg(target_os = "ios")]
 mod real {
-    use std::ffi::{c_char, c_int, c_uchar, CString};
+    use std::ffi::{CString, c_char, c_int, c_uchar};
     use std::sync::{Mutex, PoisonError};
 
     use photocraft_ui_egui::{FileDialogAnswer, FileDialogReply};
@@ -65,8 +65,7 @@ mod real {
     }
 
     pub fn open(multiple: bool, reply: FileDialogReply) {
-        *PENDING.lock().unwrap_or_else(PoisonError::into_inner) =
-            Some(Pending { reply: Some(reply), files: Vec::new() });
+        *PENDING.lock().unwrap_or_else(PoisonError::into_inner) = Some(Pending { reply: Some(reply), files: Vec::new() });
         pc_pick_open(c_int::from(multiple));
     }
 
@@ -82,16 +81,8 @@ mod real {
         // SAFETY: the pointers are the callback arguments PCDocumentPicker.m passes for the
         // lifetime of the call (the NSData and NSString outlive it), and `len` is that
         // NSData's length — both are copied below before returning.
-        let name = if name.is_null() {
-            "file".to_string()
-        } else {
-            unsafe { std::ffi::CStr::from_ptr(name) }.to_string_lossy().into_owned()
-        };
-        let data = if bytes.is_null() || len == 0 {
-            Vec::new()
-        } else {
-            unsafe { std::slice::from_raw_parts(bytes, len) }.to_vec()
-        };
+        let name = if name.is_null() { "file".to_string() } else { unsafe { std::ffi::CStr::from_ptr(name) }.to_string_lossy().into_owned() };
+        let data = if bytes.is_null() || len == 0 { Vec::new() } else { unsafe { std::slice::from_raw_parts(bytes, len) }.to_vec() };
         let mut guard = PENDING.lock().unwrap_or_else(PoisonError::into_inner);
         let Some(pending) = guard.as_mut() else { return };
         if !data.is_empty() {

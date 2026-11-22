@@ -13,9 +13,9 @@ use photocraft_ui_egui::theme::ThemeKind;
 thread_local! {
     static LAST_TAP: std::cell::RefCell<Option<egui::Pos2>> = const { std::cell::RefCell::new(None) };
 }
-use photocraft_ui_egui::{FileDialogAnswer, FileDialogRequest, PhotocraftApp, Services};
 #[cfg(target_os = "ios")]
 use objc2_ui_kit::UICoordinateSpace;
+use photocraft_ui_egui::{FileDialogAnswer, FileDialogRequest, PhotocraftApp, Services};
 
 // Unconditional: the services() below references it on every host (clippy, tests); the
 // extern "C" pc_* symbols only link on iOS, where the ObjC file is compiled in.
@@ -34,10 +34,14 @@ fn main() -> eframe::Result {
     install_locale();
     install_panic_log();
     picker::install();
-    let result = eframe::run_native("PhotoComfy", native_options(), Box::new(|cc| {
-        breadcrumb("app created");
-        Ok(Box::new(IosShell::new(cc)))
-    }));
+    let result = eframe::run_native(
+        "PhotoComfy",
+        native_options(),
+        Box::new(|cc| {
+            breadcrumb("app created");
+            Ok(Box::new(IosShell::new(cc)))
+        }),
+    );
     breadcrumb(&format!("run_native returned: {result:?}"));
     result
 }
@@ -177,9 +181,7 @@ impl IosShell {
         }
         // Testing aid: the portrait panel drawer starts open on Layers, for visual checks.
         if std::env::var_os("PHOTOCRAFT_OPEN_DRAWER").is_some() {
-            cc.egui_ctx.data_mut(|d| {
-                d.insert_temp(egui::Id::unique("touch-drawer"), Some(photocraft_ui_egui::dock::Group::Layers))
-            });
+            cc.egui_ctx.data_mut(|d| d.insert_temp(egui::Id::unique("touch-drawer"), Some(photocraft_ui_egui::dock::Group::Layers)));
         }
         // Testing aid: present the system document picker at start (the native sheet is the
         // one thing a screenshot can prove without a finger).
@@ -233,10 +235,20 @@ impl eframe::App for IosShell {
             for event in &raw_input.events {
                 match event {
                     egui::Event::Touch { phase: egui::TouchPhase::Start, pos, .. } => {
-                        breadcrumb(&format!("touch press at {pos:?} (zoom {:.3} ppp {:.3}, screen {:?})", ctx.zoom_factor(), ctx.pixels_per_point(), ctx.input(|i| i.content_rect())));
+                        breadcrumb(&format!(
+                            "touch press at {pos:?} (zoom {:.3} ppp {:.3}, screen {:?})",
+                            ctx.zoom_factor(),
+                            ctx.pixels_per_point(),
+                            ctx.input(|i| i.content_rect())
+                        ));
                     }
                     egui::Event::PointerButton { pressed: true, pos, .. } => {
-                        breadcrumb(&format!("pointer press at {pos:?} (zoom {:.3} ppp {:.3}, screen {:?})", ctx.zoom_factor(), ctx.pixels_per_point(), ctx.input(|i| i.content_rect())));
+                        breadcrumb(&format!(
+                            "pointer press at {pos:?} (zoom {:.3} ppp {:.3}, screen {:?})",
+                            ctx.zoom_factor(),
+                            ctx.pixels_per_point(),
+                            ctx.input(|i| i.content_rect())
+                        ));
                         LAST_TAP.with(|t| *t.borrow_mut() = Some(*pos));
                     }
                     _ => {}
@@ -305,7 +317,13 @@ impl eframe::App for IosShell {
                 while y < screen.bottom() {
                     let at = egui::pos2(x, y);
                     p.circle_filled(at, 3.0, egui::Color32::from_rgb(0, 200, 255));
-                    p.text(at + egui::vec2(4.0, 4.0), egui::Align2::LEFT_TOP, format!("{x:.0},{y:.0}"), egui::FontId::monospace(11.0), egui::Color32::from_rgb(0, 170, 255));
+                    p.text(
+                        at + egui::vec2(4.0, 4.0),
+                        egui::Align2::LEFT_TOP,
+                        format!("{x:.0},{y:.0}"),
+                        egui::FontId::monospace(11.0),
+                        egui::Color32::from_rgb(0, 170, 255),
+                    );
                     y += 100.0;
                 }
                 x += 100.0;
@@ -333,25 +351,17 @@ fn repair_missing_screen_rect(raw_input: &mut egui::RawInput) {
     let Some(mtm) = objc2::MainThreadMarker::new() else {
         return;
     };
-    let scenes = objc2_ui_kit::UIApplication::sharedApplication(mtm)
-        .connectedScenes()
-        .allObjects();
+    let scenes = objc2_ui_kit::UIApplication::sharedApplication(mtm).connectedScenes().allObjects();
     let scene_size = (0..scenes.count()).find_map(|index| {
-        scenes
-            .objectAtIndex(index)
-            .downcast::<objc2_ui_kit::UIWindowScene>()
-            .ok()
-            .map(|scene| {
-                #[allow(deprecated)]
-                let bounds = scene.coordinateSpace().bounds();
-                egui::vec2(bounds.size.width as f32, bounds.size.height as f32)
-            })
+        scenes.objectAtIndex(index).downcast::<objc2_ui_kit::UIWindowScene>().ok().map(|scene| {
+            #[allow(deprecated)]
+            let bounds = scene.coordinateSpace().bounds();
+            egui::vec2(bounds.size.width as f32, bounds.size.height as f32)
+        })
     });
     #[allow(deprecated)]
     let fallback_bounds = objc2_ui_kit::UIScreen::mainScreen(mtm).bounds();
-    let size = scene_size.unwrap_or_else(|| {
-        egui::vec2(fallback_bounds.size.width as f32, fallback_bounds.size.height as f32)
-    });
+    let size = scene_size.unwrap_or_else(|| egui::vec2(fallback_bounds.size.width as f32, fallback_bounds.size.height as f32));
     if size.is_finite() && size.x > 0.0 && size.y > 0.0 {
         raw_input.screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size));
     }
@@ -375,16 +385,12 @@ fn services() -> Services {
             // Folder pickers have no counterpart (as on the web): back out.
             FileDialogRequest::Folder { .. } => reply.send(None),
             FileDialogRequest::Save { suggested } => {
-                let name = Path::new(&suggested)
-                    .file_name()
-                    .map_or_else(|| suggested.clone(), |n| n.to_string_lossy().into_owned());
+                let name = Path::new(&suggested).file_name().map_or_else(|| suggested.clone(), |n| n.to_string_lossy().into_owned());
                 reply.send(Some(FileDialogAnswer::SaveTo(name)));
             }
         })),
         write: Some(Box::new(|path: &str, bytes: &[u8]| {
-            let name = Path::new(path)
-                .file_name()
-                .map_or_else(|| path.to_string(), |n| n.to_string_lossy().into_owned());
+            let name = Path::new(path).file_name().map_or_else(|| path.to_string(), |n| n.to_string_lossy().into_owned());
             let staged = std::env::temp_dir().join(format!("photocomfy-export-{name}"));
             std::fs::write(&staged, bytes).map_err(|e| e.to_string())?;
             // The write runs inline with the frame on the main thread, and the picker
