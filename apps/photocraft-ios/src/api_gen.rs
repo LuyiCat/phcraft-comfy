@@ -64,7 +64,8 @@ fn call(req: &ComfyRequest) -> std::result::Result<ComfyReply, String> {
         | ComfyCall::Interrupt
         | ComfyCall::History { .. }
         | ComfyCall::Download { .. }
-        | ComfyCall::Upload { .. } => Err(NO_SERVER.into()),
+        | ComfyCall::Upload { .. }
+        | ComfyCall::Start { .. } => Err(NO_SERVER.into()),
     }
 }
 
