@@ -22,7 +22,9 @@ use photocraft_ui_egui::{FileDialogAnswer, FileDialogRequest, FileStamp, Photocr
 mod clipboard;
 mod long_press;
 mod picker;
-// Unconditional too: the transport links everywhere and its tests run on the host.
+// Feature-gated with the Image API transport: App Store Review builds pass
+// `--no-default-features`, which drops the optional `ureq` dependency too.
+#[cfg(feature = "aigc")]
 mod api_gen;
 
 fn main() -> eframe::Result {
