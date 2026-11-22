@@ -15,6 +15,23 @@ fn memory_usage_has_a_dedicated_explanation_and_keeps_its_value() {
 }
 
 #[test]
+fn local_only_build_hides_all_remote_generation_preferences() {
+    let app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+    let mut values = json!({
+        "integrations": {
+            "comfyUrl": "http://127.0.0.1:8188",
+            "comfyWorkflowsDir": "/tmp/workflows",
+            "imageApiBase": "https://api.example.com",
+            "imageApiKey": "sk-test",
+            "imageApiModel": "gpt-image-2",
+            "allowAgentControl": true
+        }
+    });
+    super::fields::hide_unavailable_integration_fields(&app, &mut values);
+    assert_eq!(values, json!({"integrations": {"allowAgentControl": true}}));
+}
+
+#[test]
 fn the_generator_checkbox_reads_enable_generator() {
     // #9392: the reference application's Plug-ins page says "Enable Generator", not "Generator enabled".
     use egui_kittest::{Harness, kittest::Queryable};

@@ -13,6 +13,19 @@
 #[cfg(target_os = "ios")]
 use photocraft_ui_egui::FileDialogReply;
 
+#[cfg(any(target_os = "ios", test))]
+use std::ffi::CString;
+#[cfg(any(target_os = "ios", test))]
+use std::path::Path;
+
+/// Convert a staged file path to the UTF-8 C string accepted by the Objective-C picker.
+/// `pc_pick_export` copies this string before queueing UIKit work, so the temporary allocation
+/// may be released as soon as this call returns.
+#[cfg(any(target_os = "ios", test))]
+fn export_path(path: &Path) -> Option<CString> {
+    CString::new(path.to_string_lossy().as_bytes()).ok()
+}
+
 /// Wire the callbacks once, before any dialog can start (from `main`).
 #[cfg(target_os = "ios")]
 pub fn install() {
@@ -37,7 +50,7 @@ pub use stubs::{export, install, open};
 
 #[cfg(target_os = "ios")]
 mod real {
-    use std::ffi::{CString, c_char, c_int, c_uchar};
+    use std::ffi::{c_char, c_int, c_uchar};
     use std::sync::{Mutex, PoisonError};
 
     use photocraft_ui_egui::{FileDialogAnswer, FileDialogReply};
@@ -71,7 +84,7 @@ mod real {
 
     /// Present the export sheet for a file the `write` service already staged (see `main.rs`).
     pub fn export(path: &std::path::Path) {
-        let Ok(path) = CString::new(path.to_string_lossy().as_bytes()) else {
+        let Some(path) = super::export_path(path) else {
             return;
         };
         pc_pick_export(path.as_ptr());
@@ -122,4 +135,21 @@ mod stubs {
     pub fn open(_multiple: bool, _reply: FileDialogReply) {}
 
     pub fn export(_path: &std::path::Path) {}
+}
+
+#[cfg(test)]
+mod tests {
+    use super::export_path;
+    use std::path::Path;
+
+    #[test]
+    fn export_path_keeps_the_staged_filename() {
+        let path = export_path(Path::new("/tmp/photocomfy-export-image.psd")).expect("valid path");
+        assert_eq!(path.to_str().expect("UTF-8 path"), "/tmp/photocomfy-export-image.psd");
+    }
+
+    #[test]
+    fn export_path_rejects_an_embedded_nul() {
+        assert!(export_path(Path::new("/tmp/photocomfy-export-\0image.psd")).is_none());
+    }
 }

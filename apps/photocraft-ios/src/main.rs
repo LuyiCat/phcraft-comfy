@@ -22,7 +22,8 @@ use photocraft_ui_egui::{FileDialogAnswer, FileDialogRequest, PhotocraftApp, Ser
 mod clipboard;
 mod long_press;
 mod picker;
-// Unconditional too: the transport links everywhere and its tests run on the host.
+// The Image API transport is omitted only when a build explicitly disables the `aigc` feature.
+#[cfg(feature = "aigc")]
 mod api_gen;
 
 fn main() -> eframe::Result {
@@ -168,10 +169,6 @@ impl IosShell {
         // reach the system pasteboard, which egui-winit cannot do on iOS.
         cc.egui_ctx.add_plugin(photocraft_ui_egui::system_clipboard::CopySync::new(clipboard::bridge()));
         let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), services());
-        // Pen-only painting, the iPad's own policy (Photoshop on iPad): a finger pans, pinches
-        // and taps the UI, the Apple Pencil paints. The flag is each shell's choice — Android
-        // and the web leave it off — and the classifier is shared (input/finger.rs).
-        app.pen_only_painting = true;
         // Testing aid (a launcher sets no CLI args for an iPad app): open a document at start,
         // to reproduce the canvas states a reviewer sees.
         if std::env::var_os("PHOTOCRAFT_OPEN_NEW").is_some()
@@ -368,6 +365,15 @@ fn repair_missing_screen_rect(raw_input: &mut egui::RawInput) {
 }
 
 fn services() -> Services {
+    #[cfg(feature = "aigc")]
+    let (comfy_transport, comfy_image_api) = (Some(api_gen::transport()), true);
+    #[cfg(not(feature = "aigc"))]
+    let (comfy_transport, comfy_image_api) = (None, false);
+    #[cfg(feature = "aigc")]
+    let comfy_generations_dir = app_support_dir().map(|dir| dir.join("Generations"));
+    #[cfg(not(feature = "aigc"))]
+    let comfy_generations_dir = None;
+
     Services {
         import: Some(Box::new(|name: &str, bytes: &[u8], opts: &photocraft_io::ImportOptions| {
             photocraft_io::import_with_options(name, bytes, opts).map(|r| (r.document, r.warnings)).map_err(|e| e.to_string())
@@ -405,16 +411,14 @@ fn services() -> Services {
         })),
         load_prefs: Some(Box::new(read_prefs)),
         save_prefs: Some(Box::new(write_prefs)),
-        // Generation goes straight to the user's OpenAI-compatible Image API (src/api_gen.rs),
-        // not through a ComfyUI server: the endpoint, model and key are Preferences ▸ Integrations
-        // (editable in the generation panel), and results persist in the container like the
-        // desktop's Generations folder, so the shelf survives a relaunch.
+        // When enabled, generation uses the user's OpenAI-compatible Image API. Builds without
+        // the `aigc` feature leave this transport and its settings unavailable.
         // The OS text clipboard bridge (src/clipboard.rs): paste reads UIPasteboard, so text
         // copied in other apps pastes; copies mirror out through the CopySync plugin.
         system_clipboard: Some(clipboard::bridge()),
-        comfy_transport: Some(api_gen::transport()),
-        comfy_image_api: true,
-        comfy_generations_dir: app_support_dir().map(|dir| dir.join("Generations")),
+        comfy_transport,
+        comfy_image_api,
+        comfy_generations_dir,
         ..Default::default()
     }
 }
@@ -423,8 +427,8 @@ const PREFS_FILE: &str = "preferences.json";
 
 /// The app container's Application Support folder. The iOS sandbox's `HOME` is the container
 /// (the simulator's likewise); created on first use, `None` where storage is unavailable.
-/// The legacy mobile home (preferences and the Generations folder) moves here once, so the
-/// rename keeps what the user configured.
+/// The app was born PhotoCraft: its first home (preferences, the Generations folder) moves
+/// here once, so the rename keeps what the user configured.
 fn app_support_dir() -> Option<PathBuf> {
     let base = PathBuf::from(std::env::var_os("HOME")?).join("Library/Application Support");
     let dir = base.join("PhotoComfy");
@@ -437,7 +441,21 @@ fn app_support_dir() -> Option<PathBuf> {
 }
 
 fn read_prefs() -> Option<String> {
-    std::fs::read_to_string(app_support_dir()?.join(PREFS_FILE)).ok()
+    let text = std::fs::read_to_string(app_support_dir()?.join(PREFS_FILE)).ok()?;
+    #[cfg(not(feature = "aigc"))]
+    {
+        // A build without `aigc` can share a container with a build that saved Image API
+        // settings. It must not consume or rewrite those settings.
+        let mut value = serde_json::from_str::<serde_json::Value>(&text).ok()?;
+        if let Some(integrations) = value.get_mut("integrations").and_then(serde_json::Value::as_object_mut) {
+            integrations.remove("imageApiBase");
+            integrations.remove("imageApiKey");
+            integrations.remove("imageApiModel");
+        }
+        serde_json::to_string(&value).ok()
+    }
+    #[cfg(feature = "aigc")]
+    Some(text)
 }
 
 fn write_prefs(text: &str) -> Result<(), String> {
@@ -446,4 +464,18 @@ fn write_prefs(text: &str) -> Result<(), String> {
     let tmp = dir.join(format!("{PREFS_FILE}.tmp"));
     std::fs::write(&tmp, text).map_err(|e| e.to_string())?;
     std::fs::rename(&tmp, dir.join(PREFS_FILE)).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::services;
+
+    #[test]
+    fn services_match_the_build_compliance_profile() {
+        let services = services();
+        #[cfg(feature = "aigc")]
+        assert!(services.comfy_transport.is_some() && services.comfy_image_api);
+        #[cfg(not(feature = "aigc"))]
+        assert!(services.comfy_transport.is_none() && !services.comfy_image_api && services.comfy_generations_dir.is_none());
+    }
 }

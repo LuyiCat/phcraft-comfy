@@ -2,8 +2,7 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- TestFlight: sign with the Apple Distribution certificate and export the IPA; the
-	     upload step runs separately (it needs App Store Connect credentials). -->
+	<!-- TestFlight: sign with the Apple Distribution certificate and upload to App Store Connect. -->
 	<key>method</key>
 	<string>app-store-connect</string>
 	<key>teamID</key>
@@ -11,7 +10,7 @@
 	<key>signingStyle</key>
 	<string>automatic</string>
 	<key>destination</key>
-	<string>export</string>
+	<string>upload</string>
 	<key>uploadSymbols</key>
 	<true/>
 </dict>
