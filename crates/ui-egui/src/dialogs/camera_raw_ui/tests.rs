@@ -167,7 +167,7 @@ fn a_dialog_edit_develops_off_the_ui_thread() {
     let (mut app, ctx) = worker_app();
     PhotocraftApp::setup_context(&ctx, crate::theme::ThemeKind::Pro);
     let frame = |app: &mut PhotocraftApp| {
-        ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui.ctx())).textures_delta.clear();
+        ctx.run_ui(egui::RawInput::default(), |ui| fullscreen(app, ui)).textures_delta.clear();
     };
     frame(&mut app);
     let d = app.camera_raw.as_mut().unwrap();
@@ -191,7 +191,7 @@ fn a_worker_failure_is_reported_until_the_next_frame() {
     let (mut app, ctx) = worker_app();
     PhotocraftApp::setup_context(&ctx, crate::theme::ThemeKind::Pro);
     let frame = |app: &mut PhotocraftApp| {
-        ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui.ctx())).textures_delta.clear();
+        ctx.run_ui(egui::RawInput::default(), |ui| fullscreen(app, ui)).textures_delta.clear();
     };
     let fail = |app: &mut PhotocraftApp| {
         let (tx, rx) = std::sync::mpsc::channel();

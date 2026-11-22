@@ -43,6 +43,11 @@ pub fn column(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     if !crate::touch::on(app) {
         return;
     }
+    // A floating column over a full-screen panel would sit on the Camera Raw dialog (a
+    // floating layer that takes no input there, only in the way).
+    if app.camera_raw.is_some() {
+        return;
+    }
     let canvas = app.last_canvas_rect;
     if !canvas.is_positive() {
         return;

@@ -839,11 +839,15 @@ mod transform_fx_tests;
 mod transform_commit_click_tests;
 
 #[cfg(test)]
+mod camera_raw_tap_tests;
+#[cfg(test)]
 mod ios_tap_flow_tests;
 #[cfg(test)]
 mod layer_props_ui_tests;
 #[cfg(test)]
 mod notice_text_tests;
+#[cfg(test)]
+mod scroll_tap_repro_tests;
 #[cfg(test)]
 mod transform_switch_tests;
 #[cfg(test)]

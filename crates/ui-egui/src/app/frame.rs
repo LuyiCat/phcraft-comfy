@@ -281,6 +281,14 @@ impl PhotocraftApp {
         // The OS title bar (and the taskbar / Alt-Tab entry) follows the active file; with the
         // system title bar this is where the document name lives, as the in-app title is hidden.
         panels::sync_window_title(self, &ctx);
+        // Camera Raw takes the whole frame where the platform has one window (the web build, a
+        // tablet shell): the frame's first panel, so everything after it draws nothing and the
+        // dialog is modal. Floating layers render on Android yet never hit-test — as a panel
+        // (like the mobile file browser) its sliders and buttons answer a finger. `show`, later
+        // in the frame, owns the desktop's own-window form.
+        if self.camera_raw.is_some() && ctx.embed_viewports() && ui.available_rect_before_wrap().is_positive() {
+            egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| camera_raw_ui::fullscreen(self, ui));
+        }
         let chrome = !self.ui.view.hides_chrome();
         if chrome {
             self.ui.panels.full_screen_chrome = false;
