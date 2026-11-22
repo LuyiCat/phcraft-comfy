@@ -3126,24 +3126,23 @@ fn two_fingers_cancel_a_stroke_and_pan_instead_of_painting() {
     app.run("tools.setColors", json!({"foreground": [0.0, 0.0, 0.0, 1.0]})).unwrap();
     app.sync_views();
     app.ui.tool = Tool::Brush;
-    let mut h = egui_kittest::Harness::builder()
-        .with_size(egui::vec2(480.0, 360.0))
-        .with_step_dt(1.0 / 60.0)
-        .build_ui_state(
-            |ui, (app, ready): &mut (PhotocraftApp, bool)| {
-                if *ready {
-                    egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| document_area(app, ui));
-                }
-            },
-            (app, false),
-        );
+    let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(480.0, 360.0)).with_step_dt(1.0 / 60.0).build_ui_state(
+        |ui, (app, ready): &mut (PhotocraftApp, bool)| {
+            if *ready {
+                egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| document_area(app, ui));
+            }
+        },
+        (app, false),
+    );
     PhotocraftApp::setup_context(&h.ctx, crate::theme::ThemeKind::Pro);
     h.state_mut().1 = true;
     h.run_steps(3);
     let centre = h.state().0.last_canvas_rect.center();
     let centre = pos2(centre.x, centre.y);
-    let touch = |id: u64, phase: TouchPhase, pos: egui::Pos2| egui::Event::Touch { device_id: egui::TouchDeviceId(0), id: TouchId(id), phase, pos, force: None };
-    let press = |pos: egui::Pos2, pressed: bool| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+    let touch =
+        |id: u64, phase: TouchPhase, pos: egui::Pos2| egui::Event::Touch { device_id: egui::TouchDeviceId(0), id: TouchId(id), phase, pos, force: None };
+    let press =
+        |pos: egui::Pos2, pressed: bool| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
     // Frame 1: finger one alone paints — the live stroke starts on the press.
     h.input_mut().events = vec![touch(1, TouchPhase::Start, centre), press(centre, true)];
     h.step();
@@ -3175,9 +3174,5 @@ fn two_fingers_cancel_a_stroke_and_pan_instead_of_painting() {
     h.run_steps(2);
     let st = h.state().0.session.active().expect("the document");
     let buf = photocraft_compose::flatten(&st.doc);
-    assert!(
-        buf.px.iter().all(|p| p[0] < 1e-3 && p[3] < 1e-3),
-        "two fingers never paint (found {:?} …)",
-        buf.px.iter().find(|p| p[0] > 1e-3).copied()
-    );
+    assert!(buf.px.iter().all(|p| p[0] < 1e-3 && p[3] < 1e-3), "two fingers never paint (found {:?} …)", buf.px.iter().find(|p| p[0] > 1e-3).copied());
 }

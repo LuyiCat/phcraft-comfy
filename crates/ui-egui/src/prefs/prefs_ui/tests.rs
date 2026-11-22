@@ -2089,10 +2089,7 @@ fn touch_scale_is_measured_in_design_points_not_egui_points() {
     // `pixels_per_point` is the zoom factor set here).
     let factor_for = |points: egui::Vec2, zoom_in_effect: f32| {
         ctx.set_zoom_factor(zoom_in_effect);
-        let raw = egui::RawInput {
-            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, points)),
-            ..Default::default()
-        };
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, points)), ..Default::default() };
         ctx.run_ui(raw, |_| {}).textures_delta.clear();
         crate::prefs::prefs_ui::appearance::sync_display_scale(&app, &ctx);
         // `set_zoom_factor` lands at the start of the next pass.
@@ -2119,20 +2116,14 @@ fn touch_scale_settles_instead_of_oscillating() {
     let physical = egui::vec2(1376.0, 1032.0);
     let mut zooms = Vec::new();
     for _ in 0..8 {
-        let raw = egui::RawInput {
-            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, physical / ctx.pixels_per_point())),
-            ..Default::default()
-        };
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, physical / ctx.pixels_per_point())), ..Default::default() };
         ctx.run_ui(raw, |_| {}).textures_delta.clear();
         crate::prefs::prefs_ui::appearance::sync_display_scale(&app, &ctx);
         ctx.run_ui(egui::RawInput::default(), |_| {}).textures_delta.clear();
         zooms.push(ctx.zoom_factor());
     }
     let settled = *zooms.last().unwrap();
-    assert!(
-        zooms.iter().rev().take(4).all(|z| (z - settled).abs() < 1e-4),
-        "the touch factor must settle; it kept moving: {zooms:?}"
-    );
+    assert!(zooms.iter().rev().take(4).all(|z| (z - settled).abs() < 1e-4), "the touch factor must settle; it kept moving: {zooms:?}");
 }
 
 #[test]

@@ -82,10 +82,8 @@ impl ThumbnailCache {
 
 /// Check if two path strings match, tolerating slash direction and Windows case differences.
 fn paths_match(a: &str, b: &str) -> bool {
-    if a == b {
-        return true;
-    }
     #[cfg(windows)]
+    // Normalised and case-insensitive comparison subsumes the exact-equal case.
     {
         let a_norm = a.replace('\\', "/");
         let b_norm = b.replace('\\', "/");
@@ -93,7 +91,7 @@ fn paths_match(a: &str, b: &str) -> bool {
     }
     #[cfg(not(windows))]
     {
-        false
+        a == b
     }
 }
 

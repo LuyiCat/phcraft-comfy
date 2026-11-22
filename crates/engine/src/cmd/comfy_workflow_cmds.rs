@@ -222,19 +222,13 @@ fn widget_capable(def: &Value) -> bool {
 /// A frontend-only widget (`socketless: true`): the node's execute ignores it, a UI save
 /// serialises no value for it, but the API format still requires the key.
 fn socketless(def: &Value) -> bool {
-    def.as_array()
-        .and_then(|a| a.get(1))
-        .and_then(Value::as_object)
-        .is_some_and(|o| o.get("socketless").and_then(Value::as_bool) == Some(true))
+    def.as_array().and_then(|a| a.get(1)).and_then(Value::as_object).is_some_and(|o| o.get("socketless").and_then(Value::as_bool) == Some(true))
 }
 
 /// Whether the input's widget carries a trailing control (`seed` + "randomize"): such a widget
 /// serializes two values into `widgets_values`.
 fn has_control_after(def: &Value) -> bool {
-    def.as_array()
-        .and_then(|a| a.get(1))
-        .and_then(Value::as_object)
-        .is_some_and(|o| o.get("control_after_generate").and_then(Value::as_bool) == Some(true))
+    def.as_array().and_then(|a| a.get(1)).and_then(Value::as_object).is_some_and(|o| o.get("control_after_generate").and_then(Value::as_bool) == Some(true))
 }
 
 fn is_dynamic_combo(def: &Value) -> bool {
@@ -369,8 +363,9 @@ pub fn convert_ui_workflow(ui: &Value, object_info: &Value) -> std::result::Resu
             continue;
         }
         let id = node.get("id").and_then(Value::as_i64).ok_or_else(|| "a node without an id".to_string())?;
-        let specs = input_specs(object_info, class)
-            .ok_or_else(|| format!("node {id} (`{class}`): the ComfyUI server has no such node; install its custom nodes, or export the workflow as API format"))?;
+        let specs = input_specs(object_info, class).ok_or_else(|| {
+            format!("node {id} (`{class}`): the ComfyUI server has no such node; install its custom nodes, or export the workflow as API format")
+        })?;
         // The node's connected inputs: name → link id.
         let mut connected: HashMap<String, i64> = HashMap::new();
         for i in node.get("inputs").and_then(Value::as_array).into_iter().flatten() {
@@ -400,9 +395,8 @@ pub fn convert_ui_workflow(ui: &Value, object_info: &Value) -> std::result::Resu
                 continue;
             }
             if is_dynamic_combo(spec.def) {
-                let chosen = wq.take().cloned().or_else(|| default_of(spec.def)).ok_or_else(|| {
-                    format!("node {id} (`{class}`): no value for `{}`", spec.name)
-                })?;
+                let chosen =
+                    wq.take().cloned().or_else(|| default_of(spec.def)).ok_or_else(|| format!("node {id} (`{class}`): no value for `{}`", spec.name))?;
                 inputs.insert(spec.name.clone(), chosen.clone());
                 for child in dynamic_combo_children(spec.def, &chosen) {
                     if let Some(v) = wq.take().cloned() {
@@ -520,17 +514,12 @@ fn sides_of_samplers(obj: &Map<String, Value>) -> (Vec<String>, Vec<String>) {
 fn prompt_input_nodes(obj: &Map<String, Value>) -> Vec<String> {
     let mut hits: Vec<String> = obj
         .iter()
-        .filter(|(_, n)| {
-            n.get("inputs")
-                .and_then(Value::as_object)
-                .is_some_and(|i| i.iter().any(|(k, v)| (k == "prompt" || k == "提示词") && v.is_string()))
-        })
+        .filter(|(_, n)| n.get("inputs").and_then(Value::as_object).is_some_and(|i| i.iter().any(|(k, v)| (k == "prompt" || k == "提示词") && v.is_string())))
         .map(|(id, _)| id.clone())
         .collect();
     hits.sort_by_key(|id| id.parse::<u64>().unwrap_or(u64::MAX));
     hits
 }
-
 
 /// What [`inject`] touched, echoed back so the panel can show it.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -686,19 +675,13 @@ fn builtin_api_workflow() -> Value {
 
 /// A workflow whose generation is one direct Image API call, not a ComfyUI graph a server runs.
 pub fn is_api_workflow(workflow: &Value) -> bool {
-    workflow.as_object().is_some_and(|o| {
-        o.values().any(|n| n.get("class_type").and_then(Value::as_str) == Some("PhotocraftImageApi"))
-    })
+    workflow.as_object().is_some_and(|o| o.values().any(|n| n.get("class_type").and_then(Value::as_str) == Some("PhotocraftImageApi")))
 }
 
 /// The workflows compiled into the app, importable with zero setup.
 fn builtin_workflows() -> Vec<(&'static str, Value)> {
     let v: Value = serde_json::from_str(include_str!("comfy_flux3_klein.json")).unwrap_or(Value::Null);
-    if comfy_cmds::valid_workflow(&v) {
-        vec![(BUILTIN_FLUX3, v)]
-    } else {
-        Vec::new()
-    }
+    if comfy_cmds::valid_workflow(&v) { vec![(BUILTIN_FLUX3, v)] } else { Vec::new() }
 }
 
 /// A workflow name safe to use as a file stem (no separators, no traversal, bounded).
@@ -719,9 +702,10 @@ fn workflows_dir(s: &Session) -> Result<PathBuf> {
     if !pref.is_empty() {
         return Ok(PathBuf::from(pref));
     }
-    s.comfy.workflows_dir.clone().ok_or_else(|| {
-        EngineError::Other("no workflow folder: set Preferences ▸ Integrations ▸ ComfyUI Workflows Folder (or use the desktop app)".into())
-    })
+    s.comfy
+        .workflows_dir
+        .clone()
+        .ok_or_else(|| EngineError::Other("no workflow folder: set Preferences ▸ Integrations ▸ ComfyUI Workflows Folder (or use the desktop app)".into()))
 }
 
 /// Load a workflow by name: built-ins first, then the store folder.
@@ -737,8 +721,7 @@ fn load_workflow(s: &Session, name: &str) -> Result<Value> {
     let safe = safe_name(name).ok_or_else(|| bad("ai.comfyui.fill", format!("`workflow` `{name}` is not a valid workflow name")))?;
     let path = workflows_dir(s)?.join(format!("{safe}.json"));
     let bytes = read_store_file(&path)?;
-    let v: Value = serde_json::from_slice(&bytes)
-        .map_err(|e| EngineError::Other(format!("{safe}: not a JSON workflow ({e})")))?;
+    let v: Value = serde_json::from_slice(&bytes).map_err(|e| EngineError::Other(format!("{safe}: not a JSON workflow ({e})")))?;
     if !comfy_cmds::valid_workflow(&v) {
         return Err(EngineError::Other(format!("{safe}: not a ComfyUI API-format graph; re-import it (Export (API) from ComfyUI)")));
     }
@@ -791,7 +774,8 @@ fn list_workflows(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn import_workflow(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "ai.comfyui.workflows.import";
-    let path = p.get("path").and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty()).ok_or_else(|| bad(CMD, "`path` must be the workflow file to import"))?;
+    let path =
+        p.get("path").and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty()).ok_or_else(|| bad(CMD, "`path` must be the workflow file to import"))?;
     if path.len() > 4_000 {
         return Err(bad(CMD, "`path` is too long"));
     }
@@ -815,11 +799,7 @@ fn import_workflow(s: &mut Session, p: &Value) -> Result<Value> {
                 transport(&ComfyRequest { url, call: ComfyCall::ObjectInfo }).map_err(|e| comfy_cmds::at("reading ComfyUI's node definitions", e))?,
             )?;
             Value::Object(
-                convert_ui_workflow(&v, &oi)
-                    .map_err(|e| EngineError::Other(format!("{}: {e}", path.display())))?
-                    .as_object()
-                    .cloned()
-                    .unwrap_or_default(),
+                convert_ui_workflow(&v, &oi).map_err(|e| EngineError::Other(format!("{}: {e}", path.display())))?.as_object().cloned().unwrap_or_default(),
             )
         } else if comfy_cmds::valid_workflow(&v) {
             v
@@ -846,7 +826,8 @@ fn import_workflow(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn remove_workflow(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "ai.comfyui.workflows.remove";
-    let name = p.get("name").and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty()).ok_or_else(|| bad(CMD, "`name` must be the workflow to remove"))?;
+    let name =
+        p.get("name").and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty()).ok_or_else(|| bad(CMD, "`name` must be the workflow to remove"))?;
     let safe = safe_name(name).ok_or_else(|| bad(CMD, format!("`{name}` is not a valid workflow name")))?;
     if builtin_workflows().iter().any(|(n, _)| *n == safe) || safe == BUILTIN_IMAGE_API {
         return Err(bad(CMD, format!("`{safe}` is built in and cannot be removed")));
@@ -885,7 +866,6 @@ impl FillSource {
             Some(other) => Err(bad("ai.comfyui.fill", format!("`source` must be \"canvas\", \"layer\" or \"selection\", not \"{other}\""))),
         }
     }
-
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -937,7 +917,13 @@ fn fill_params(p: &Value) -> Result<FillParams> {
     const CMD: &str = "ai.comfyui.fill";
     let prompt = text_field(p, "prompt", CMD)?;
     let negative = text_field(p, "negative", CMD)?;
-    let workflow = p.get("workflow").and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty()).ok_or_else(|| bad(CMD, "`workflow` must name a workflow (ai.comfyui.workflows.list)"))?.to_string();
+    let workflow = p
+        .get("workflow")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| bad(CMD, "`workflow` must name a workflow (ai.comfyui.workflows.list)"))?
+        .to_string();
     if workflow.len() > NAME_MAX {
         return Err(bad(CMD, format!("`workflow` is longer than {NAME_MAX} characters")));
     }
@@ -1108,7 +1094,14 @@ fn fill_image_api(s: &mut Session, params: FillParams, doc: std::sync::Arc<Docum
             let started = std::time::Instant::now();
             let reply = transport(&ComfyRequest {
                 url: cfg.base.clone(),
-                call: ComfyCall::ApiImage { base: cfg.base.clone(), key: cfg.key.clone(), model: cfg.model.clone(), prompt: prompt.clone(), image: Some(png), timeout_s: params.timeout_s },
+                call: ComfyCall::ApiImage {
+                    base: cfg.base.clone(),
+                    key: cfg.key.clone(),
+                    model: cfg.model.clone(),
+                    prompt: prompt.clone(),
+                    image: Some(png),
+                    timeout_s: params.timeout_s,
+                },
             })
             .map_err(|e| comfy_cmds::at("the Image API call", e))?;
             ctx.check()?;
@@ -1140,13 +1133,19 @@ fn fill_done(s: &mut Session, outcome: FillOutcome, selection: &Option<Surface>,
     for bytes in outcome.generation.images {
         indices.push(push_result(
             s,
-            StoredResult { bytes, seed: outcome.seed, prompt: outcome.prompt.clone(), workflow: outcome.workflow.clone(), selection: selection.clone(), created_ms: created, file: None },
+            StoredResult {
+                bytes,
+                seed: outcome.seed,
+                prompt: outcome.prompt.clone(),
+                workflow: outcome.workflow.clone(),
+                selection: selection.clone(),
+                created_ms: created,
+                file: None,
+            },
         ));
     }
-    let shelf: Vec<(Vec<u8>, u64, Option<Surface>)> = indices
-        .iter()
-        .filter_map(|&i| s.comfy.results.get(i).map(|r| (r.bytes.clone(), r.seed, r.selection.clone())))
-        .collect();
+    let shelf: Vec<(Vec<u8>, u64, Option<Surface>)> =
+        indices.iter().filter_map(|&i| s.comfy.results.get(i).map(|r| (r.bytes.clone(), r.seed, r.selection.clone()))).collect();
     if shelf.len() != indices.len() {
         return Err(EngineError::Other("a result vanished before it could be placed".into()));
     }
@@ -1256,7 +1255,11 @@ fn place_result_native(s: &mut Session, bytes: &[u8], selection: Option<&Surface
 
 fn place(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "ai.comfyui.place";
-    let idx = p.get("result").and_then(Value::as_u64).filter(|v| *v <= RESULT_LIMIT as u64).ok_or_else(|| bad(CMD, "`result` must be a result index from ai.comfyui.fill"))? as usize;
+    let idx = p
+        .get("result")
+        .and_then(Value::as_u64)
+        .filter(|v| *v <= RESULT_LIMIT as u64)
+        .ok_or_else(|| bad(CMD, "`result` must be a result index from ai.comfyui.fill"))? as usize;
     let as_kind = match p.get("as").and_then(Value::as_str) {
         None | Some("layer") => "layer",
         Some("native") => "native",
@@ -1291,7 +1294,11 @@ fn remove_results(s: &mut Session, p: &Value) -> Result<Value> {
         write_index(&s.comfy);
         return Ok(json!({"removed": files.len(), "files": files}));
     }
-    let idx = p.get("result").and_then(Value::as_u64).filter(|v| *v <= RESULT_LIMIT as u64).ok_or_else(|| bad(CMD, "`result` must be a result index from ai.comfyui.fill, or `all`: true"))? as usize;
+    let idx = p
+        .get("result")
+        .and_then(Value::as_u64)
+        .filter(|v| *v <= RESULT_LIMIT as u64)
+        .ok_or_else(|| bad(CMD, "`result` must be a result index from ai.comfyui.fill, or `all`: true"))? as usize;
     let Some(r) = s.comfy.results.get(idx) else {
         return Err(bad(CMD, format!("result {idx} is gone (the shelf keeps the newest {RESULT_LIMIT})")));
     };
@@ -1306,7 +1313,11 @@ fn remove_results(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn save(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "ai.comfyui.save";
-    let idx = p.get("result").and_then(Value::as_u64).filter(|v| *v <= RESULT_LIMIT as u64).ok_or_else(|| bad(CMD, "`result` must be a result index from ai.comfyui.fill"))? as usize;
+    let idx = p
+        .get("result")
+        .and_then(Value::as_u64)
+        .filter(|v| *v <= RESULT_LIMIT as u64)
+        .ok_or_else(|| bad(CMD, "`result` must be a result index from ai.comfyui.fill"))? as usize;
     let path = p.get("path").and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty()).ok_or_else(|| bad(CMD, "`path` must be the file to write"))?;
     if path.len() > 4_000 {
         return Err(bad(CMD, "`path` is too long"));
@@ -1320,8 +1331,7 @@ fn save(s: &mut Session, p: &Value) -> Result<Value> {
     let (bytes, seed, len) = (r.bytes.clone(), r.seed, r.bytes.len());
     #[cfg(not(target_arch = "wasm32"))]
     {
-        photocraft_format::atomic_write(std::path::Path::new(path), &bytes)
-            .map_err(|e| EngineError::Other(format!("{path}: {e}")))?;
+        photocraft_format::atomic_write(std::path::Path::new(path), &bytes).map_err(|e| EngineError::Other(format!("{path}: {e}")))?;
     }
     #[cfg(target_arch = "wasm32")]
     {
@@ -1421,8 +1431,8 @@ pub fn specs() -> Vec<CommandSpec> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::comfy_cmds::ComfyReply;
+    use super::*;
     use photocraft_color::{ColorMode, PixelFormat, SampleType};
     use photocraft_doc::Size;
     use photocraft_geom::Rect;
@@ -1818,7 +1828,8 @@ mod tests {
         assert_eq!(r["bytes"], json!(s.comfy.results[0].bytes.len()));
         assert_eq!(std::fs::read(&out).unwrap().len(), s.comfy.results[0].bytes.len());
         // Junk is refused, not panicked on.
-        for p in [json!({"result": 99}), json!({}), json!({"result": 0, "as": "sky"}), json!({"result": 0, "path": "x.jpg"}), json!({"result": 0, "path": ""})] {
+        for p in [json!({"result": 99}), json!({}), json!({"result": 0, "as": "sky"}), json!({"result": 0, "path": "x.jpg"}), json!({"result": 0, "path": ""})]
+        {
             assert!(s.execute("ai.comfyui.place", p.clone()).is_err() || s.execute("ai.comfyui.save", p.clone()).is_err(), "{p}");
         }
         assert!(s.execute("ai.comfyui.place", json!({"result": 500})).is_err());
@@ -1934,8 +1945,14 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut s = Session::new();
         s.comfy.generations_dir = Some(dir.path().to_path_buf());
-        push_result(&mut s, StoredResult { bytes: b"one".to_vec(), seed: 7, prompt: "p1".into(), workflow: "w1".into(), selection: None, created_ms: 100, file: None });
-        push_result(&mut s, StoredResult { bytes: b"two".to_vec(), seed: 8, prompt: "p2".into(), workflow: "w2".into(), selection: None, created_ms: 200, file: None });
+        push_result(
+            &mut s,
+            StoredResult { bytes: b"one".to_vec(), seed: 7, prompt: "p1".into(), workflow: "w1".into(), selection: None, created_ms: 100, file: None },
+        );
+        push_result(
+            &mut s,
+            StoredResult { bytes: b"two".to_vec(), seed: 8, prompt: "p2".into(), workflow: "w2".into(), selection: None, created_ms: 200, file: None },
+        );
         assert_eq!(s.comfy.results.len(), 2);
         assert_eq!(pngs_in(dir.path()).len(), 2);
         assert!(dir.path().join("index.json").exists());
