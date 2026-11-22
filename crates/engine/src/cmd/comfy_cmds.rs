@@ -1003,17 +1003,11 @@ fn generate(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// Start the server when asked, as the first thing a generation does (a probe when it is
 /// already up — one cheap loopback round trip). Report progress while a cold server loads.
-pub(crate) fn ensure_started(
-    ctx: &JobCtx,
-    transport: &ComfyFn,
-    url: &str,
-    command: Option<&str>,
-) -> Result<()> {
+pub(crate) fn ensure_started(ctx: &JobCtx, transport: &ComfyFn, url: &str, command: Option<&str>) -> Result<()> {
     let Some(command) = command else { return Ok(()) };
     ctx.progress(0.01, "Starting ComfyUI…");
     let _ = json_of(
-        transport(&ComfyRequest { url: url.to_string(), call: ComfyCall::Start { command: command.to_string() } })
-            .map_err(|e| at("starting ComfyUI", e))?,
+        transport(&ComfyRequest { url: url.to_string(), call: ComfyCall::Start { command: command.to_string() } }).map_err(|e| at("starting ComfyUI", e))?,
     )?; // The stats themselves are the next call's to read.
     Ok(())
 }
@@ -1048,8 +1042,7 @@ fn start(s: &mut Session, p: &Value) -> Result<Value> {
         move |ctx| {
             ctx.progress(0.05, "Starting ComfyUI…");
             let v = json_of(
-                transport(&ComfyRequest { url: url.clone(), call: ComfyCall::Start { command: command.clone() } })
-                    .map_err(|e| at("starting ComfyUI", e))?,
+                transport(&ComfyRequest { url: url.clone(), call: ComfyCall::Start { command: command.clone() } }).map_err(|e| at("starting ComfyUI", e))?,
             )?;
             ctx.progress(1.0, "ComfyUI is up");
             Ok(json!({"url": url, "server": v}))

@@ -85,12 +85,7 @@ fn install_at(dir: &Path) -> Option<Install> {
 /// none of the checkout's packages, torch included).
 fn python_in(dir: &Path) -> Option<PathBuf> {
     #[cfg(windows)]
-    let candidates = [
-        ".venv/Scripts/python.exe",
-        "venv/Scripts/python.exe",
-        "../.venv/Scripts/python.exe",
-        "python_embeded/python.exe",
-    ];
+    let candidates = [".venv/Scripts/python.exe", "venv/Scripts/python.exe", "../.venv/Scripts/python.exe", "python_embeded/python.exe"];
     #[cfg(not(windows))]
     let candidates = [".venv/bin/python3", ".venv/bin/python", "venv/bin/python3", "venv/bin/python", "../.venv/bin/python3", "../.venv/bin/python"];
     candidates.iter().map(|rel| dir.join(rel)).find(|p| p.is_file())
@@ -130,12 +125,7 @@ fn manifest_roots(manifest: &Path) -> Vec<PathBuf> {
         return Vec::new();
     }
     let Ok(serde_json::Value::Array(installs)) = serde_json::from_str(&text) else { return Vec::new() };
-    installs
-        .iter()
-        .filter_map(|install| install.get("installPath")?.as_str())
-        .take(MAX_INSTALLS)
-        .map(|path| PathBuf::from(path).join("ComfyUI"))
-        .collect()
+    installs.iter().filter_map(|install| install.get("installPath")?.as_str()).take(MAX_INSTALLS).map(|path| PathBuf::from(path).join("ComfyUI")).collect()
 }
 
 /// ComfyUI Desktop's default install folder: `<install>/ComfyUI` one level down from each entry.
@@ -244,11 +234,8 @@ mod tests {
         fake_install(&install);
         let manifest = tmp.path().join("Comfy Desktop/installations.json");
         std::fs::create_dir_all(manifest.parent().unwrap()).unwrap();
-        std::fs::write(
-            &manifest,
-            format!(r#"[{{"id":"inst-1","name":"ComfyUI","installPath":{:?},"status":"installed"}}]"#, install.display().to_string()),
-        )
-        .unwrap();
+        std::fs::write(&manifest, format!(r#"[{{"id":"inst-1","name":"ComfyUI","installPath":{:?},"status":"installed"}}]"#, install.display().to_string()))
+            .unwrap();
         let roots = manifest_roots(&manifest);
         assert_eq!(roots, vec![install.join("ComfyUI")]);
     }

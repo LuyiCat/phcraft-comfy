@@ -204,7 +204,8 @@ fn start_in(url: &str, command: &str, roots: &[std::path::PathBuf]) -> Result<Co
         if let Ok(f) = &mut log {
             use std::io::Write as _;
             let _ = writeln!(f, "$ {command}");
-            cmd.stdout(f.try_clone().map_err(|e| format!("duplicating the ComfyUI log handle: {e}"))?).stderr(f.try_clone().map_err(|e| format!("duplicating the ComfyUI log handle: {e}"))?);
+            cmd.stdout(f.try_clone().map_err(|e| format!("duplicating the ComfyUI log handle: {e}"))?)
+                .stderr(f.try_clone().map_err(|e| format!("duplicating the ComfyUI log handle: {e}"))?);
         }
         match cmd.spawn() {
             Ok(child) => *guard = Some(child),

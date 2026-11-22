@@ -31,25 +31,20 @@ pub fn chip(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     let w = SIZE + 2.0 * PAD;
     let min = pos2(canvas.left() + MARGIN, canvas.top() + MARGIN);
     let mut go_standard = false;
-    egui::Area::new(egui::Id::unique("screen-mode-chip"))
-        .order(Order::Foreground)
-        .fixed_pos(min)
-        .show(&ctx, |ui| {
-            let card = Rect::from_min_size(ui.cursor().min, vec2(w, w));
-            ui.painter().rect_filled(card, t.radius_lg, t.card.gamma_multiply(0.97));
-            ui.painter().rect_stroke(card, t.radius_lg, Stroke::new(1.0, t.card_border), StrokeKind::Inside);
-            ui.add_space(PAD);
-            // The screen-mode glyph the toolbar's own screen-mode buttons use; the tip is the
-            // destination mode, translated from the View menu's catalog entry.
-            let button = icons::button(ui, "maximize-2", SIZE, false, tl!("Standard Screen Mode"));
-            button.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, tl!("Standard Screen Mode")));
-            if button.clicked() {
-                go_standard = true;
-            }
-        });
-    if go_standard
-        && let Err(e) = crate::menus::invoke(app, &ctx, "view.screenMode.standard", json!({}))
-    {
+    egui::Area::new(egui::Id::unique("screen-mode-chip")).order(Order::Foreground).fixed_pos(min).show(&ctx, |ui| {
+        let card = Rect::from_min_size(ui.cursor().min, vec2(w, w));
+        ui.painter().rect_filled(card, t.radius_lg, t.card.gamma_multiply(0.97));
+        ui.painter().rect_stroke(card, t.radius_lg, Stroke::new(1.0, t.card_border), StrokeKind::Inside);
+        ui.add_space(PAD);
+        // The screen-mode glyph the toolbar's own screen-mode buttons use; the tip is the
+        // destination mode, translated from the View menu's catalog entry.
+        let button = icons::button(ui, "maximize-2", SIZE, false, tl!("Standard Screen Mode"));
+        button.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, tl!("Standard Screen Mode")));
+        if button.clicked() {
+            go_standard = true;
+        }
+    });
+    if go_standard && let Err(e) = crate::menus::invoke(app, &ctx, "view.screenMode.standard", json!({})) {
         app.ui.status = e;
         app.ui.status_error = true;
     }

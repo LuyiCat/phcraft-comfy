@@ -67,12 +67,7 @@ pub const IMAGE_API_ONLY: &[&str] = &["integrations.imageApiBase", "integrations
 
 /// The ComfyUI server settings: the mobile apps have no ComfyUI server to talk to, so the dialog
 /// hides them there (the desktop shows them, and hides the Image API ones instead).
-pub const COMFYUI_ONLY: &[&str] = &[
-    "integrations.comfyUrl",
-    "integrations.comfyWorkflowsDir",
-    "integrations.comfyAutostart",
-    "integrations.comfyCommand",
-];
+pub const COMFYUI_ONLY: &[&str] = &["integrations.comfyUrl", "integrations.comfyWorkflowsDir", "integrations.comfyAutostart", "integrations.comfyCommand"];
 
 /// Longest launch command the ComfyUI auto-start accepts (a shell one-liner; megabyte strings
 /// from a hostile preferences file are refused, not stored).

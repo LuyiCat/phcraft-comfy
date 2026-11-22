@@ -2,8 +2,8 @@
 //! the Standard screen mode, because an iPad has neither of the desktop's two ways out of a
 //! full-screen mode (Esc, Tab).
 
-use egui_kittest::kittest::Queryable;
 use egui_kittest::Harness;
+use egui_kittest::kittest::Queryable;
 use serde_json::json;
 
 use crate::PhotocraftApp;
@@ -31,10 +31,7 @@ fn touch_harness(screen_mode: &str) -> Harness<'static, PhotocraftApp> {
 fn chip<'a>(h: &'a Harness<'_, PhotocraftApp>) -> Option<egui_kittest::Node<'a>> {
     h.query_all_by_label("Standard Screen Mode")
         .into_iter()
-        .find(|n| {
-            crate::panels::screen_mode_chip::rect(&h.ctx)
-                .is_some_and(|card| card.contains(n.rect().center()))
-        })
+        .find(|n| crate::panels::screen_mode_chip::rect(&h.ctx).is_some_and(|card| card.contains(n.rect().center())))
 }
 
 #[test]

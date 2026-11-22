@@ -39,10 +39,7 @@ fn layer_names(h: &Harness<'_, PhotocraftApp>) -> Vec<String> {
 /// same name, which the touch layout also shows.
 fn mode_pill<'a>(h: &'a Harness<'_, PhotocraftApp>, label: &'a str) -> Node<'a> {
     let card = crate::panels::quick_actions::rect(&h.ctx);
-    h.query_all_by_label(label)
-        .into_iter()
-        .find(|n| card.is_none_or(|c| !c.contains(n.rect().center())))
-        .expect("the popup's mode pill")
+    h.query_all_by_label(label).into_iter().find(|n| card.is_none_or(|c| !c.contains(n.rect().center()))).expect("the popup's mode pill")
 }
 
 #[test]
@@ -185,7 +182,11 @@ fn a_strip_drop_of_one_selected_layer_carries_the_selection() {
     h.event(egui::Event::PointerButton { pos: strip, button: egui::PointerButton::Primary, pressed: false, modifiers: egui::Modifiers::NONE });
     h.run_steps(4);
     assert_eq!(h.state().session.layer_tray.len(), 1);
-    assert_eq!(h.state().session.layer_tray[0].doc.layers.iter().map(|l| l.name.as_str()).collect::<Vec<_>>(), ["paint", "second"], "the whole selection went into the slot");
+    assert_eq!(
+        h.state().session.layer_tray[0].doc.layers.iter().map(|l| l.name.as_str()).collect::<Vec<_>>(),
+        ["paint", "second"],
+        "the whole selection went into the slot"
+    );
 }
 
 /// The tray popup's Copy | Cut toggle, switched by a tap (iOS has no right-click; a mode that

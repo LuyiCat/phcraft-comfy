@@ -172,12 +172,9 @@ fn bad_params_and_states_fail_without_changing_anything() {
     let (mut s, _paint) = two_docs(40, 30, 8);
     // Before anything is stashed: place/remove/clear refuse.
     assert!(!s.is_enabled("layer.tray.place"));
-    for (cmd, p) in [
-        ("layer.tray.place", json!({})),
-        ("layer.tray.place", json!({"slot": 0})),
-        ("layer.tray.remove", json!({"slot": 0})),
-        ("layer.tray.clear", json!({})),
-    ] {
+    for (cmd, p) in
+        [("layer.tray.place", json!({})), ("layer.tray.place", json!({"slot": 0})), ("layer.tray.remove", json!({"slot": 0})), ("layer.tray.clear", json!({}))]
+    {
         assert!(s.execute(cmd, p.clone()).is_err(), "{cmd} {p}");
     }
     s.execute("layer.tray.put", json!({})).unwrap();

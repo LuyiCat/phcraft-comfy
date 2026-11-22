@@ -58,8 +58,14 @@ fn call(req: &ComfyRequest) -> std::result::Result<ComfyReply, String> {
             let base = image_api_base_url(base)?;
             Ok(ComfyReply::Json(get_json(&base, "/models", key, CALL_TIMEOUT)?))
         }
-        ComfyCall::SystemStats | ComfyCall::ObjectInfo | ComfyCall::Queue { .. } | ComfyCall::Interrupt | ComfyCall::History { .. }
-        | ComfyCall::Download { .. } | ComfyCall::Upload { .. } | ComfyCall::Start { .. } => Err(NO_SERVER.into()),
+        ComfyCall::SystemStats
+        | ComfyCall::ObjectInfo
+        | ComfyCall::Queue { .. }
+        | ComfyCall::Interrupt
+        | ComfyCall::History { .. }
+        | ComfyCall::Download { .. }
+        | ComfyCall::Upload { .. }
+        | ComfyCall::Start { .. } => Err(NO_SERVER.into()),
     }
 }
 

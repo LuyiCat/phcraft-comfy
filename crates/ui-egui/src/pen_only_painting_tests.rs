@@ -9,9 +9,9 @@ use egui_kittest::Harness;
 use photocraft_algo::liquify::LiquifyTool;
 use serde_json::json;
 
+use crate::PhotocraftApp;
 use crate::canvas::{ToolEvent, document_area};
 use crate::state::Tool;
-use crate::PhotocraftApp;
 
 /// The app over a transparent 64×64 document with a hard 8 px black brush, `pen_only` policy.
 fn app(pen_only: bool, tool: Tool) -> PhotocraftApp {
@@ -29,17 +29,14 @@ fn app(pen_only: bool, tool: Tool) -> PhotocraftApp {
 
 /// The whole-app canvas harness (as the two-finger gesture tests build it).
 fn canvas(app: PhotocraftApp) -> (Harness<'static, (PhotocraftApp, bool)>, Pos2) {
-    let mut h = Harness::builder()
-        .with_size(egui::vec2(480.0, 360.0))
-        .with_step_dt(1.0 / 60.0)
-        .build_ui_state(
-            |ui, (app, ready): &mut (PhotocraftApp, bool)| {
-                if *ready {
-                    egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| document_area(app, ui));
-                }
-            },
-            (app, false),
-        );
+    let mut h = Harness::builder().with_size(egui::vec2(480.0, 360.0)).with_step_dt(1.0 / 60.0).build_ui_state(
+        |ui, (app, ready): &mut (PhotocraftApp, bool)| {
+            if *ready {
+                egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| document_area(app, ui));
+            }
+        },
+        (app, false),
+    );
     PhotocraftApp::setup_context(&h.ctx, crate::theme::ThemeKind::Pro);
     h.state_mut().1 = true;
     h.run_steps(3);
