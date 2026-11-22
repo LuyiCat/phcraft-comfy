@@ -64,7 +64,8 @@ fn call(req: &ComfyRequest) -> std::result::Result<ComfyReply, String> {
         | ComfyCall::Interrupt
         | ComfyCall::History { .. }
         | ComfyCall::Download { .. }
-        | ComfyCall::Upload { .. } => Err(NO_SERVER.into()),
+        | ComfyCall::Upload { .. }
+        | ComfyCall::Start { .. } => Err(NO_SERVER.into()),
     }
 }
 
@@ -156,6 +157,7 @@ mod tests {
             ComfyCall::History { prompt_id: "p".into() },
             ComfyCall::Download { filename: "f".into(), subfolder: String::new(), kind: "output".into() },
             ComfyCall::Upload { name: "n".into(), bytes: Vec::new() },
+            ComfyCall::Start { command: "python main.py".into() },
         ] {
             let Err(e) = t(&ComfyRequest { url: "https://x.example".into(), call }) else { panic!("the ComfyUI protocol must be refused, not answered") };
             assert!(e.contains("Image API"), "{e}");

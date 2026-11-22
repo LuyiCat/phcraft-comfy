@@ -59,6 +59,7 @@ mod panel_state;
 pub mod preset_panels;
 mod properties;
 pub(crate) mod quick_actions;
+pub(crate) mod screen_mode_chip;
 pub(crate) use properties::selection_mode_buttons;
 pub mod props_layout;
 pub mod selection_hud;

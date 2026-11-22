@@ -423,8 +423,8 @@ const PREFS_FILE: &str = "preferences.json";
 
 /// The app container's Application Support folder. The iOS sandbox's `HOME` is the container
 /// (the simulator's likewise); created on first use, `None` where storage is unavailable.
-/// The app was born PhotoCraft: its first home (preferences, the Generations folder) moves
-/// here once, so the rename keeps what the user configured.
+/// The legacy mobile home (preferences and the Generations folder) moves here once, so the
+/// rename keeps what the user configured.
 fn app_support_dir() -> Option<PathBuf> {
     let base = PathBuf::from(std::env::var_os("HOME")?).join("Library/Application Support");
     let dir = base.join("PhotoComfy");

@@ -29,7 +29,10 @@ slot after placing; Cut removes them from the source on stash and empties the sl
 — move. A **quick-actions column** (Undo, Redo, Copy, Cut, Paste) floats at the canvas's
 top-right corner, left of the end dock — the touch answer to ⌘Z/⌘⇧Z/⌘C/⌘X/⌘V; each button
 runs the engine's own edit command, so enablement and the OS-clipboard paste behave exactly
-as the Edit menu's. The interface runs in Preferences ›
+as the Edit menu's. And because an iPad has neither an Esc nor a Tab key, a full-screen
+mode (View › Screen Mode) keeps a small **exit chip** at the canvas's top-left corner: one
+tap returns to the Standard screen mode, where the tools, drawer and menus come back. The
+interface runs in Preferences ›
 Interface › Touch Interface (on by default on iPadOS): magnified targets, always-visible scroll
 bars, and the safe area respected at the screen edges. Services the OS doesn't provide an iPad
 app (desktop file dialogs, the clipboard bridge, crash recovery) stay unset and the shell
