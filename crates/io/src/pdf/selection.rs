@@ -8,6 +8,26 @@ pub(super) struct SelectionFont {
     chars: BTreeSet<char>,
 }
 
+/// The Differences name for `ch` at one-byte `code`. A name-based extractor (lopdf 0.47 and
+/// up resolves the font's /Encoding names before /ToUnicode) reads the text back only when the
+/// names are the characters' own, so ASCII and the layout whitespace carry standard names —
+/// every other character keeps a font-local `/cN` name, legal for a Type 3 font, with
+/// /ToUnicode remaining the Unicode authority for it. `#` and the PDF delimiters are escaped
+/// as `#XX`, the name-token rule (PDF 32000-1 §7.3.5).
+fn glyph_name(code: usize, ch: char) -> String {
+    match ch {
+        ' ' => "space".into(),
+        '\n' => "controlLF".into(),
+        '\r' => "controlCR".into(),
+        '\t' => "controlHT".into(),
+        '!'..='~' => match ch {
+            '#' | '%' | '(' | ')' | '<' | '>' | '[' | ']' | '{' | '}' | '/' => format!("#{:02X}", u32::from(ch)),
+            _ => ch.to_string(),
+        },
+        _ => format!("c{code}"),
+    }
+}
+
 impl SelectionFont {
     /// Collect distinct characters until the one-byte code space is exceeded. Stopping there,
     /// rather than after a fixed number of characters scanned, keeps a long run of repeated
@@ -40,13 +60,13 @@ impl SelectionFont {
     // Object numbers are assigned by the caller, after the optional ICC object.
     pub(super) fn objects(&self, base: usize) -> Vec<Vec<u8>> {
         let count = self.chars.len().min(255);
+        let chars: Vec<_> = self.chars.iter().take(count).collect();
         let mut differences = String::new();
         let mut procs = String::new();
         let mut cmap = String::from(
             "/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n/CMapName /PhotoCraftUnicode def\n/CMapType 2 def\n1 begincodespacerange\n<00> <FF>\nendcodespacerange\n",
         );
         // PDF permits at most 100 entries in each bfchar block.
-        let chars: Vec<_> = self.chars.iter().take(count).collect();
         for (block, chunk) in chars.chunks(100).enumerate() {
             let _ = writeln!(cmap, "{} beginbfchar", chunk.len());
             for (i, ch) in chunk.iter().enumerate() {
@@ -58,9 +78,10 @@ impl SelectionFont {
             cmap.push_str("endbfchar\n");
         }
         cmap.push_str("endcmap\nCMapName currentdict /CMap defineresource pop\nend\nend\n");
-        for code in 1..=count {
-            let _ = write!(differences, " /c{code}");
-            let _ = write!(procs, " /c{code} {} 0 R", base + 1);
+        for (index, ch) in chars.iter().enumerate() {
+            let name = glyph_name(index + 1, **ch);
+            let _ = write!(differences, " /{name}");
+            let _ = write!(procs, " /{name} {} 0 R", base + 1);
         }
         let widths = "1000 ".repeat(count.max(1));
         let font = format!(
@@ -107,5 +128,33 @@ mod tests {
         assert!(cmap.contains("100 beginbfchar"));
         assert!(cmap.contains("50 beginbfchar"));
         assert!(cmap.contains("<65> <0164>"));
+    }
+
+    #[test]
+    fn ascii_and_layout_whitespace_carry_standard_glyph_names() {
+        let font = SelectionFont::new(std::iter::once("A b\nc"));
+        let objects = font.objects(0);
+        let dict = String::from_utf8_lossy(&objects[0]);
+        // BTreeSet order: '\n', ' ', 'A', 'b', 'c' — the names a name-based extractor resolves.
+        assert!(dict.contains("/Differences [1 /controlLF /space /A /b /c]"), "{dict}");
+        assert!(dict.contains("/CharProcs << /controlLF 1 0 R /space 1 0 R /A 1 0 R /b 1 0 R /c 1 0 R >>"), "{dict}");
+    }
+
+    #[test]
+    fn delimiters_in_glyph_names_are_hash_escaped() {
+        let font = SelectionFont::new(std::iter::once("#(/"));
+        let objects = font.objects(0);
+        let dict = String::from_utf8_lossy(&objects[0]);
+        assert!(dict.contains("/Differences [1 /#23 /#28 /#2F]"), "{dict}");
+        assert!(dict.contains("/CharProcs << /#23 1 0 R /#28 1 0 R /#2F 1 0 R >>"), "{dict}");
+    }
+
+    #[test]
+    fn characters_without_a_standard_name_stay_font_local() {
+        let font = SelectionFont::new(std::iter::once("é"));
+        let objects = font.objects(0);
+        let dict = String::from_utf8_lossy(&objects[0]);
+        assert!(dict.contains("/Differences [1 /c1]"), "{dict}");
+        assert!(dict.contains("/CharProcs << /c1 1 0 R >>"), "{dict}");
     }
 }
