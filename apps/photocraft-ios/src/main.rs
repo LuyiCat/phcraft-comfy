@@ -405,6 +405,9 @@ fn services() -> Services {
             Ok(())
         })),
         write_unconfirmed: true,
+        // The iPad shell's save sheet cannot ask whether to replace the file it names, so
+        // the app's own replace prompt does (file_dialog.rs).
+        save_dialog_unconfirmed: true,
         encode_png: Some(Box::new(|w, h, rgba| {
             let img = Image::from_u8(w, h, ChannelLayout::Rgba, rgba.to_vec()).map_err(|e| e.to_string())?;
             photocraft_codecs::encode(&img, photocraft_codecs::Format::Png, &EncodeOptions::default()).map_err(|e| e.to_string())

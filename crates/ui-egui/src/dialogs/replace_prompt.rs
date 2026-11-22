@@ -24,7 +24,13 @@ pub fn owns(fields: &Map<String, Value>) -> bool {
 /// answer.
 pub(crate) fn open(app: &mut PhotocraftApp, answered: &str, path: &str) {
     let message = crate::i18n::fmt(tl!("“{name}” already exists. Replace it?"), &[("name", display_name(path).as_str())]);
-    let detail = crate::i18n::fmt(tl!("The name in the save dialog was “{name}”."), &[("name", display_name(answered).as_str())]);
+    // A platform with no dialog of its own (`save_dialog_unconfirmed`, the iPad) answered the
+    // path itself: there is no second name to explain, only what the two buttons do.
+    let detail = if answered == path {
+        tl!("Replace writes over the existing file; Cancel keeps it.").to_string()
+    } else {
+        crate::i18n::fmt(tl!("The name in the save dialog was “{name}”."), &[("name", display_name(answered).as_str())])
+    };
     let fields = json!({MARK: true, "__label": "Save", "message": message, "detail": detail, "path": path});
     app.ui.open_dialog(DialogKind::Command, fields.as_object().cloned().unwrap_or_default());
 }

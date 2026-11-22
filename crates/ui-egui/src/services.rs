@@ -427,6 +427,12 @@ pub struct Services {
     /// case. A hard link is another entry. A save asks before replacing an entry it finds
     /// different (`replace_prompt`).
     pub same_file: Option<SameFileFn>,
+    /// The platform's save dialog cannot ask whether to replace a file it names (the iPad shell
+    /// answers the name at once; there is no native panel). A save to a file that already
+    /// exists then asks through the app's own replace prompt, even when the answered path is
+    /// exactly the path written. A desktop's native panel asks itself and leaves this off; the
+    /// web's download can't compare a local file at all.
+    pub save_dialog_unconfirmed: bool,
     /// `write` only asks for the bytes to be kept (a browser download, which the user can
     /// cancel and which reports nothing back), so a save through it names the document but
     /// leaves its changes unsaved and the leave-page guard armed (#4962).
