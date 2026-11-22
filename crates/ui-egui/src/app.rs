@@ -217,6 +217,7 @@ impl PhotocraftApp {
             stylus: Default::default(),
             fingers: Default::default(),
             pen_only_painting: false,
+            pen_zoom_disabled: false,
             control_click: Default::default(),
             background_jobs: false,
             min_frame_ms: None,
@@ -291,6 +292,10 @@ impl eframe::App for PhotocraftApp {
         // A pen held still is no touch screen's press-and-hold right click (stylus.rs).
         let pen_down = self.stylus.pen_contacts.observe(&raw_input.events);
         stylus::pen_hold_is_no_right_click(ctx, pen_down);
+        // Keep pen navigation policy next to the contact classifier so every mobile shell gets
+        // the same protection. The canvas consumes this before it handles wheel, pinch or the
+        // Zoom tool for the frame.
+        self.pen_zoom_disabled = pen_down;
         if self.custom_titlebar {
             titlebar::release_after_os_resize(ctx, raw_input);
         }

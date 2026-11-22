@@ -605,11 +605,14 @@ fn update_canvas_navigation(app: &mut PhotocraftApp, view: &mut View, input: Can
     // General › Animated Zoom: the wheel zoom eases over the frames of a notch, or is one instant step.
     // Enhanced Controls › Enable Gestures off: two fingers on a touch screen neither zoom nor
     // turn the view (#204); the mouse and trackpad are unaffected.
-    let touch_gestures = app.session.prefs().enhanced_controls.touch_gestures;
+    // A pen contact is a drawing/editing input. It must not be interpreted as a pinch or any
+    // other zoom gesture on mobile; finger navigation remains available after the pen lifts.
+    let touch_gestures = app.session.prefs().enhanced_controls.touch_gestures && !app.pen_zoom_disabled;
+    let pinch_zooms = app.session.prefs().enhanced_controls.zoom_with_trackpad_pinch && !app.pen_zoom_disabled;
     let wheel = crate::wheel_nav::read_with(
         input.ctx,
         app.session.prefs().general.zoom_with_scroll_wheel,
-        app.session.prefs().enhanced_controls.zoom_with_trackpad_pinch,
+        pinch_zooms,
         app.session.prefs().general.animated_zoom,
         input.wheel_owner,
         nav_hovered,
@@ -989,7 +992,7 @@ fn handle_canvas_tool_navigation(
     }
     // Animated Zoom: a Zoom press held still zooms continuously (zoom_hold.rs); while it does,
     // it owns the press: no scrub, and its release is no click step.
-    if tool == Tool::Zoom && !transform_owns_pointer {
+    if tool == Tool::Zoom && !transform_owns_pointer && !app.pen_zoom_disabled {
         let out = zoom_out(ui.input(|i| i.modifiers.alt));
         let on_canvas = !input.under_dialog && !over_compass && response.is_pointer_button_down_on();
         let hold = crate::zoom_hold::hold_id(idx, primary, ctx.viewport_id());
@@ -999,7 +1002,11 @@ fn handle_canvas_tool_navigation(
     }
     // Zoom tool drags: scrubby zoom or a zoom rectangle (zoom_tool.rs); clicks step below.
     // Like the Hand, the selected Zoom yields to an open Free Transform box (#4799).
-    if tool == Tool::Zoom && !transform_owns_pointer && crate::zoom_tool::drag(app, ctx, view, xf, buttons, response.interact_pointer_pos()) {
+    if tool == Tool::Zoom
+        && !transform_owns_pointer
+        && !app.pen_zoom_disabled
+        && crate::zoom_tool::drag(app, ctx, view, xf, buttons, response.interact_pointer_pos())
+    {
         (buttons.started, buttons.dragged, buttons.stopped) = (false, false, false);
     }
 }
@@ -1219,7 +1226,7 @@ fn handle_canvas_tool_clicks(
         };
         let d = xf.to_doc(p);
         match tool {
-            Tool::Zoom if !transform_owns_pointer => {
+            Tool::Zoom if !transform_owns_pointer && !app.pen_zoom_disabled => {
                 let nz = crate::zoom_levels::step(view.zoom, if zoom_out(click_mods.alt) { -1 } else { 1 }, view.doc_size);
                 let center = app.session.prefs().tools.zoom_clicked_point_to_center;
                 let doc_anchor = xf.to_doc(p);
@@ -1920,7 +1927,7 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
             && crate::wheel_nav::read_with(
                 &ctx,
                 app.session.prefs().general.zoom_with_scroll_wheel,
-                app.session.prefs().enhanced_controls.zoom_with_trackpad_pinch,
+                app.session.prefs().enhanced_controls.zoom_with_trackpad_pinch && !app.pen_zoom_disabled,
                 app.session.prefs().general.animated_zoom,
                 wheel_owner,
                 hover_here,

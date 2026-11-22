@@ -733,6 +733,10 @@ pub struct PhotocraftApp {
     /// stroke or a Liquify push; the pencil, a mouse, automation and every other tool are
     /// unaffected. Desktop, web and Android leave it off.
     pub pen_only_painting: bool,
+    /// A pen contact is down this frame: pen input is drawing/editing, so the canvas must not
+    /// read it as a pinch, a wheel or the Zoom tool's drag (the mobile navigation policy the
+    /// iPad and Android shells share). Set each frame from the stylus contact classifier.
+    pub pen_zoom_disabled: bool,
     control_click: control_click::ControlClick,
     /// Run long commands and file opens as background jobs with progress and Cancel (#210; see
     /// `jobs_ui`). The desktop app turns it on; off (the default), everything runs inline as
