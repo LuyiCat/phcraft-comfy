@@ -15,9 +15,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "AA2C00010000000000000005"
-               BuildableName = "PhotoCraft.app"
-               BlueprintName = "PhotoCraft"
-               ReferencedContainer = "container:PhotoCraft.xcodeproj">
+               BuildableName = "PhotoComfy.app"
+               BlueprintName = "PhotoComfy"
+               ReferencedContainer = "container:PhotoComfy.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -44,9 +44,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "AA2C00010000000000000005"
-            BuildableName = "PhotoCraft.app"
-            BlueprintName = "PhotoCraft"
-            ReferencedContainer = "container:PhotoCraft.xcodeproj">
+            BuildableName = "PhotoComfy.app"
+            BlueprintName = "PhotoComfy"
+            ReferencedContainer = "container:PhotoComfy.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -61,9 +61,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "AA2C00010000000000000005"
-            BuildableName = "PhotoCraft.app"
-            BlueprintName = "PhotoCraft"
-            ReferencedContainer = "container:PhotoCraft.xcodeproj">
+            BuildableName = "PhotoComfy.app"
+            BlueprintName = "PhotoComfy"
+            ReferencedContainer = "container:PhotoComfy.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

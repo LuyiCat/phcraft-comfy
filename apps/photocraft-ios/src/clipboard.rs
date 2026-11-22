@@ -1,7 +1,7 @@
 //! The UIPasteboard half of the system clipboard bridge
 //! (`crates/ui-egui/src/system_clipboard.rs`): egui-winit compiles its OS clipboard (arboard)
 //! out on iOS, leaving an in-app fallback, so text copied in Safari or Notes never pasted into a
-//! field and PhotoCraft's own copies never reached other apps. The bridge reads and writes the
+//! field and PhotoComfy's own copies never reached other apps. The bridge reads and writes the
 //! real pasteboard; every paste trigger in the app goes through it
 //! (the text field menu, ⌘V, Edit › Paste).
 //!
