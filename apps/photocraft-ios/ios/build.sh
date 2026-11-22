@@ -98,6 +98,35 @@ if [ -z "${CRAFT_FONTS_DIR:-}" ] && [ -d "$REPO/../craft-fonts/fonts" ]; then
     export CRAFT_FONTS_DIR
 fi
 
+# The pinned winit/egui forks carry three fixes that live only as patch files
+# (../patches/README.md): taps landing below their targets on iOS, the safe-area insets, and the
+# zoom-rescale jitter. They were applied to the cargo git checkouts by hand, which any cargo
+# clean/update silently undoes. Apply them here instead — every build self-heals — and clean the
+# patched crates only when a patch actually changed something (--forward skips applied hunks).
+apply_fork_patch() {
+    patch_file="$1"
+    for manifest in $(cargo metadata --format-version 1 2>/dev/null | tr ',' '\n' | sed -n 's/.*"manifest_path":"\([^"]*\)\/Cargo.toml".*/\1/p' | grep -E '/(winit|egui)$'); do
+        name=$(basename "$manifest")
+        case "$(basename "$patch_file")" in
+            *winit*) [ "$name" = "winit" ] || continue ;;
+            *) [ "$name" = "egui" ] || continue ;;
+        esac
+        # The patch roots at the fork's checkout: the egui workspace root sits two levels above
+        # its package manifest, winit's manifest is its root.
+        source_dir=$(dirname "$manifest")
+        [ "$(basename "$source_dir")" = "crates" ] && source_dir=$(dirname "$source_dir")
+        # --forward skips already-applied hunks; a checkout the patch changed needs a clean.
+        patch_out=$(patch -d "$source_dir" -p1 --forward < "$patch_file" 2>&1 || true)
+        if echo "$patch_out" | grep -q "^patching file"; then
+            echo "fork patch applied: $name <- $(basename "$patch_file") (in $source_dir)"
+            cargo clean -p "$name" --profile "$PROFILE" --target "$TARGET" 2>/dev/null || cargo clean -p "$name" 2>/dev/null || true
+        fi
+    done
+}
+for patch_file in "$(dirname "$0")/../patches/"*.patch; do
+    [ -e "$patch_file" ] && apply_fork_patch "$patch_file"
+done
+
 echo "building photocraft-ios for $TARGET ($PROFILE)…"
 # --offline keeps cargo from a network round-trip on every Xcode Run; the fingerprint check
 # below makes repeats cheap, and an actually-needed dependency update is a deliberate act.
