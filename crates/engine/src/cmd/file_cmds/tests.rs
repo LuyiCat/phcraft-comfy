@@ -1976,10 +1976,7 @@ fn placing_a_psd_file_into_another_psd_document() {
     let l = d.doc.layer(d.active_layer.unwrap()).unwrap();
     assert_eq!(l.name, "src");
     let LayerContent::Smart(so) = &l.content else { panic!("smart object expected") };
-    assert!(
-        matches!(&so.source, SmartSource::Embedded { bytes, .. } if **bytes == psd.bytes),
-        "the whole PSD is embedded"
-    );
+    assert!(matches!(&so.source, SmartSource::Embedded { bytes, .. } if **bytes == psd.bytes), "the whole PSD is embedded");
     // Fitted to the canvas width (20:10 → 100×50), centred vertically: rows 25..75 red.
     assert!(composite(&s, 50, 50)[0] > 0.99 && composite(&s, 50, 50)[1] < 0.01);
     assert!(composite(&s, 50, 10)[1] > 0.99, "white background above");

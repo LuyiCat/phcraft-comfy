@@ -938,7 +938,8 @@ pub fn dialog(app: &mut PhotocraftApp, ctx: &egui::Context) {
             // The Touch Interface shows it at once: its devices run the slowest CPUs the app
             // targets, so a job is never "quick" there, and the desktop's grace delay left a tap
             // looking dead for a quarter second on a phone.
-            if j.command == "file.automate.batch" || j.elapsed_ms < dialog_delay(crate::touch::on(app)) || place || app.jobs.saves.iter().any(|s| s.job == j.id) {
+            if j.command == "file.automate.batch" || j.elapsed_ms < dialog_delay(crate::touch::on(app)) || place || app.jobs.saves.iter().any(|s| s.job == j.id)
+            {
                 return;
             }
             j

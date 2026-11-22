@@ -43,7 +43,8 @@ pub enum Group {
 
 impl Group {
     /// Photoshop Essentials order, top to bottom.
-    pub const ALL: [Group; 8] = [Group::Color, Group::Properties, Group::Character, Group::Navigator, Group::History, Group::Layers, Group::Brushes, Group::Comfy];
+    pub const ALL: [Group; 8] =
+        [Group::Color, Group::Properties, Group::Character, Group::Navigator, Group::History, Group::Layers, Group::Brushes, Group::Comfy];
 
     pub fn key(self) -> &'static str {
         match self {
