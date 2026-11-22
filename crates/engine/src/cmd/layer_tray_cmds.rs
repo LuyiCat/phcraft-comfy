@@ -40,7 +40,11 @@ fn bad(cmd: &str, msg: impl Into<String>) -> EngineError {
 
 /// The slot index param, checked against the tray.
 fn slot_index(s: &Session, p: &Value, key: &str) -> Result<usize> {
-    let i = p.get(key).and_then(Value::as_u64).and_then(|i| usize::try_from(i).ok()).ok_or_else(|| bad("layer.tray.place", format!("`{key}` must be a tray slot index")))?;
+    let i = p
+        .get(key)
+        .and_then(Value::as_u64)
+        .and_then(|i| usize::try_from(i).ok())
+        .ok_or_else(|| bad("layer.tray.place", format!("`{key}` must be a tray slot index")))?;
     if i >= s.layer_tray.len() {
         return Err(bad("layer.tray.place", format!("no tray slot {i} (there are {})", s.layer_tray.len())));
     }
@@ -129,12 +133,7 @@ fn place(s: &mut Session, p: &Value) -> Result<Value> {
     // tab-drop rule. Bounds are measured in the slot's own space, before any destination refresh.
     let same_size = stashed.size == dest.size;
     let center = p.get("center").and_then(Value::as_bool);
-    let content = |doc: &Document| {
-        doc.layers
-            .iter()
-            .filter_map(crate::layer_multi_cmds::layer_bounds)
-            .fold(photocraft_geom::Rect::EMPTY, |a, b| a.union(&b))
-    };
+    let content = |doc: &Document| doc.layers.iter().filter_map(crate::layer_multi_cmds::layer_bounds).fold(photocraft_geom::Rect::EMPTY, |a, b| a.union(&b));
     let bounds = content(&copies);
     let (dx, dy) = if let Some(at) = crate::layer_copy_cmds::point(p, "at")? {
         let c = crate::layer_copy_cmds::center(bounds);
@@ -191,11 +190,7 @@ fn clear(s: &mut Session, _p: &Value) -> Result<Value> {
 pub fn specs() -> Vec<CommandSpec> {
     fn put_enabled(s: &Session) -> std::result::Result<(), String> {
         s.active().ok_or("no document open")?.active_layer.ok_or("no active layer")?;
-        if s.layer_tray.len() >= TRAY_SLOTS {
-            Err(format!("the tray is full ({TRAY_SLOTS} slots)"))
-        } else {
-            Ok(())
-        }
+        if s.layer_tray.len() >= TRAY_SLOTS { Err(format!("the tray is full ({TRAY_SLOTS} slots)")) } else { Ok(()) }
     }
     fn place_enabled(s: &Session) -> std::result::Result<(), String> {
         (!s.layer_tray.is_empty()).then_some(()).ok_or_else(|| "the tray is empty".to_string())?;

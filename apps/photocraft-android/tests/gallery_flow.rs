@@ -7,9 +7,9 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, SystemTime};
 
-use egui_kittest::kittest::Queryable;
 use egui_kittest::Harness;
-use photocraft_android::browser::{projects_root, Action, Browser};
+use egui_kittest::kittest::Queryable;
+use photocraft_android::browser::{Action, Browser, projects_root};
 use photocraft_android::gallery::{GalleryItem, GalleryPermission, GallerySource};
 use photocraft_ui_egui::{FileDialogAnswer, FileDialogReply};
 
@@ -32,11 +32,10 @@ fn reply(ctx: &egui::Context) -> (FileDialogReply, mpsc::Receiver<Option<FileDia
 }
 
 fn harness(browser: &Arc<Browser>) -> Harness<'static, Shell> {
-    let mut harness: Harness<'static, Shell> =
-        Harness::builder().with_size(egui::vec2(914.0, 571.0)).with_pixels_per_point(2.0).build_eframe(|cc| {
-            photocraft_ui_egui::PhotocraftApp::setup_context(&cc.egui_ctx, Default::default());
-            Shell { browser: browser.clone() }
-        });
+    let mut harness: Harness<'static, Shell> = Harness::builder().with_size(egui::vec2(914.0, 571.0)).with_pixels_per_point(2.0).build_eframe(|cc| {
+        photocraft_ui_egui::PhotocraftApp::setup_context(&cc.egui_ctx, Default::default());
+        Shell { browser: browser.clone() }
+    });
     harness.run_steps(2);
     harness
 }
@@ -73,31 +72,15 @@ impl FakeGallery {
 
     fn items() -> Vec<GalleryItem> {
         vec![
-            GalleryItem {
-                id: 7,
-                name: "IMG_0001.jpg".into(),
-                mime: "image/jpeg".into(),
-                size: 2048,
-                modified: 1_799_000_000,
-            },
-            GalleryItem {
-                id: 8,
-                name: "DSC002.arw".into(),
-                mime: "image/x-sony-arw".into(),
-                size: 45_000_000,
-                modified: 1_798_000_000,
-            },
+            GalleryItem { id: 7, name: "IMG_0001.jpg".into(), mime: "image/jpeg".into(), size: 2048, modified: 1_799_000_000 },
+            GalleryItem { id: 8, name: "DSC002.arw".into(), mime: "image/x-sony-arw".into(), size: 45_000_000, modified: 1_798_000_000 },
         ]
     }
 }
 
 impl GallerySource for FakeGallery {
     fn permission(&self) -> GalleryPermission {
-        if *self.granted.lock().unwrap_or_else(PoisonError::into_inner) {
-            GalleryPermission::Granted
-        } else {
-            GalleryPermission::Missing
-        }
+        if *self.granted.lock().unwrap_or_else(PoisonError::into_inner) { GalleryPermission::Granted } else { GalleryPermission::Missing }
     }
 
     fn request_permission(&self) -> Result<(), String> {
@@ -135,10 +118,7 @@ fn gallery_gate_lists_and_picks_by_contents() {
     assert!(browser.is_active(), "the browser opens");
 
     // The gate is the first thing an unfiltered Open shows.
-    assert!(
-        harness.query_by_label("PhotoComfy needs photo access to list the gallery.").is_some(),
-        "the permission gate shows first"
-    );
+    assert!(harness.query_by_label("PhotoComfy needs photo access to list the gallery.").is_some(), "the permission gate shows first");
     harness.get_by_label("Allow photo access").click();
     harness.run_steps(2);
     // The grant lands without a callback (as on the device): Refresh re-checks and lists.
@@ -155,10 +135,7 @@ fn gallery_gate_lists_and_picks_by_contents() {
     harness.get_by_label("IMG_0001.jpg  image  2.0 KB").click();
     let answered = wait_for(&mut harness, |_| !browser.is_active());
     assert!(answered, "the browser closed after the pick");
-    assert_eq!(
-        recv(&rx),
-        Some(Some(FileDialogAnswer::Contents("IMG_0001.jpg".into(), b"bytes of IMG_0001.jpg".to_vec())))
-    );
+    assert_eq!(recv(&rx), Some(Some(FileDialogAnswer::Contents("IMG_0001.jpg".into(), b"bytes of IMG_0001.jpg".to_vec()))));
 }
 
 /// The Projects tab lists the app's saved documents, newest first, and opens one by path.
@@ -193,12 +170,7 @@ fn projects_tab_lists_and_opens_newest_first() {
 
     nested.click();
     harness.run_steps(5);
-    assert_eq!(
-        recv(&rx),
-        Some(Some(FileDialogAnswer::Paths(vec![
-            projects.join("sub").join("nested.pcraft").to_string_lossy().into_owned()
-        ])))
-    );
+    assert_eq!(recv(&rx), Some(Some(FileDialogAnswer::Paths(vec![projects.join("sub").join("nested.pcraft").to_string_lossy().into_owned()]))));
     assert!(!browser.is_active());
 
     let _ = std::fs::remove_file(projects.join("old.psd"));
@@ -219,11 +191,9 @@ fn save_defaults_to_the_projects_folder() {
     harness.get_by_label("Save").click();
     harness.run_steps(5);
     match recv(&rx) {
-        Some(Some(FileDialogAnswer::SaveTo(path))) => assert_eq!(
-            path,
-            projects_root().join("gallery-flow-save.psd").to_string_lossy().into_owned(),
-            "the save lands in the Projects folder"
-        ),
+        Some(Some(FileDialogAnswer::SaveTo(path))) => {
+            assert_eq!(path, projects_root().join("gallery-flow-save.psd").to_string_lossy().into_owned(), "the save lands in the Projects folder")
+        }
         other => panic!("no save path answered: {other:?}"),
     }
     assert!(!browser.is_active());

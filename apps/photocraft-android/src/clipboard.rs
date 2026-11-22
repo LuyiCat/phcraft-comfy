@@ -34,10 +34,7 @@ mod real {
     use photocraft_ui_egui::system_clipboard::SystemClipboard;
 
     pub fn bridge() -> SystemClipboard {
-        SystemClipboard {
-            get: Some(Arc::new(crate::platform::clipboard_text)),
-            set: Some(Arc::new(|text: &str| crate::platform::set_clipboard_text(text))),
-        }
+        SystemClipboard { get: Some(Arc::new(crate::platform::clipboard_text)), set: Some(Arc::new(|text: &str| crate::platform::set_clipboard_text(text))) }
     }
 }
 

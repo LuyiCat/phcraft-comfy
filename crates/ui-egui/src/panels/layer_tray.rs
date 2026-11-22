@@ -58,11 +58,7 @@ fn slot_label(slot: &photocraft_engine::layer_tray_cmds::TraySlot) -> String {
 /// one of the selected, else the dragged layer alone (the footer_drop commands' shape).
 fn stash_payload(app: &PhotocraftApp, dragged: u64) -> Value {
     let in_selection = app.session.active().is_some_and(|st| st.selected_layers().iter().any(|s| s.0 == dragged));
-    if in_selection {
-        json!({})
-    } else {
-        json!({"layers": [dragged]})
-    }
+    if in_selection { json!({}) } else { json!({"layers": [dragged]}) }
 }
 
 /// Run the tray's stash (`layer.tray.put`) in the popup's current mode. Copy just stashes;
@@ -79,9 +75,7 @@ pub(super) fn run_put(app: &mut PhotocraftApp, payload: &Value) {
     app.reorder_preview = None;
     match app.run("layer.tray.put", payload.clone()) {
         Ok(_) => {
-            if cut
-                && let Err(e) = app.run("layer.delete", delete)
-            {
+            if cut && let Err(e) = app.run("layer.delete", delete) {
                 // The stash itself succeeded; only the source cleanup failed (cutting the last
                 // layer of a document is refused, as in Photoshop). Say so and keep the slot.
                 app.ui.status = e;
@@ -190,7 +184,10 @@ pub(super) fn footer_button(app: &mut PhotocraftApp, ui: &mut egui::Ui, footer_d
         // The count badge: a non-empty tray is one click away, an empty one reads as idle.
         let t = Tokens::get(ui.ctx());
         let digits = count.to_string();
-        let badge = Rect::from_min_size(pos2(button.rect.right() - 4.0 - digits.len() as f32 * 5.5, button.rect.top() - 3.0), vec2(4.0 + digits.len() as f32 * 5.5, 12.0));
+        let badge = Rect::from_min_size(
+            pos2(button.rect.right() - 4.0 - digits.len() as f32 * 5.5, button.rect.top() - 3.0),
+            vec2(4.0 + digits.len() as f32 * 5.5, 12.0),
+        );
         ui.painter().rect_filled(badge, 5.0, t.accent);
         ui.painter().text(badge.center(), Align2::CENTER_CENTER, digits, FontId::monospace(9.0), Color32::WHITE);
     }
@@ -204,60 +201,54 @@ pub(super) fn footer_button(app: &mut PhotocraftApp, ui: &mut egui::Ui, footer_d
     let mut place = None;
     let mut remove = None;
     let mut clear = false;
-    egui::Popup::from_toggle_button_response(&button)
-        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
-        .show(|ui| {
-            // One fixed width for the popup: every row's thumbnail, name and ✕ line up, and a
-            // long layer name is elided rather than widening the popup past the screen.
-            ui.set_width(250.0);
-            ui.horizontal(|ui| {
-                ui.strong(tl!("Layer Tray"));
-                if ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| ui.button(tl!("Clear Tray"))).inner.clicked() {
-                    clear = true;
-                }
-            });
-            mode_toggle(app, ui);
-            ui.separator();
-            if app.session.layer_tray.is_empty() {
-                ui.label(
-                    egui::RichText::new(tl!("The tray is empty: drag layers onto the button, or use Add to Tray in a layer's menu"))
-                        .small()
-                        .weak(),
-                );
-                return;
-            }
-            let enabled = app.session.active().is_some();
-            // Newest first: what was just stashed is the most likely to be placed.
-            for index in (0..app.session.layer_tray.len()).rev() {
-                let (row, remove_clicked) = slot_row(app, ui, index, enabled);
-                // A tap places; the release of a slot drag elsewhere would also read as a click
-                // (egui counts it from the press's widget), so a slot drag suppresses it.
-                if enabled && !remove_clicked && row.clicked() && ctx.data(|d| d.get_temp::<usize>(slot_drag_key())).is_none() {
-                    place = Some(index);
-                }
-                // Or the slot row is dragged out and released over the canvas: the layers land
-                // centred on that point, and the popup stays open for the next slot.
-                if enabled && row.drag_started() {
-                    ctx.data_mut(|d| d.insert_temp(slot_drag_key(), index));
-                }
-                if remove_clicked {
-                    remove = Some(index);
-                }
-                if index > 0 {
-                    // Air between slots: every row is its own thumbnail, name and source.
-                    ui.add_space(2.0);
-                }
+    egui::Popup::from_toggle_button_response(&button).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
+        // One fixed width for the popup: every row's thumbnail, name and ✕ line up, and a
+        // long layer name is elided rather than widening the popup past the screen.
+        ui.set_width(250.0);
+        ui.horizontal(|ui| {
+            ui.strong(tl!("Layer Tray"));
+            if ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| ui.button(tl!("Clear Tray"))).inner.clicked() {
+                clear = true;
             }
         });
-    if let (Some(slot), Some(p), released) = (ctx.data(|d| d.get_temp::<usize>(slot_drag_key())), ctx.input(|i| i.pointer.interact_pos()), ctx.input(|i| i.pointer.any_released())) {
+        mode_toggle(app, ui);
+        ui.separator();
+        if app.session.layer_tray.is_empty() {
+            ui.label(egui::RichText::new(tl!("The tray is empty: drag layers onto the button, or use Add to Tray in a layer's menu")).small().weak());
+            return;
+        }
+        let enabled = app.session.active().is_some();
+        // Newest first: what was just stashed is the most likely to be placed.
+        for index in (0..app.session.layer_tray.len()).rev() {
+            let (row, remove_clicked) = slot_row(app, ui, index, enabled);
+            // A tap places; the release of a slot drag elsewhere would also read as a click
+            // (egui counts it from the press's widget), so a slot drag suppresses it.
+            if enabled && !remove_clicked && row.clicked() && ctx.data(|d| d.get_temp::<usize>(slot_drag_key())).is_none() {
+                place = Some(index);
+            }
+            // Or the slot row is dragged out and released over the canvas: the layers land
+            // centred on that point, and the popup stays open for the next slot.
+            if enabled && row.drag_started() {
+                ctx.data_mut(|d| d.insert_temp(slot_drag_key(), index));
+            }
+            if remove_clicked {
+                remove = Some(index);
+            }
+            if index > 0 {
+                // Air between slots: every row is its own thumbnail, name and source.
+                ui.add_space(2.0);
+            }
+        }
+    });
+    if let (Some(slot), Some(p), released) =
+        (ctx.data(|d| d.get_temp::<usize>(slot_drag_key())), ctx.input(|i| i.pointer.interact_pos()), ctx.input(|i| i.pointer.any_released()))
+    {
         let ghost = app.session.layer_tray.get(slot).map(slot_label);
         if let Some(label) = ghost.as_deref() {
             crate::layer_transfer::ghost(&ctx, p, label);
         }
         if released {
-            let at = app.last_canvas_rect.contains(p)
-                .then_some(crate::canvas::ViewXform::active(app).map(|xf| xf.to_doc(p)))
-                .flatten();
+            let at = app.last_canvas_rect.contains(p).then_some(crate::canvas::ViewXform::active(app).map(|xf| xf.to_doc(p))).flatten();
             if let Some(at) = at {
                 run_place(app, json!({"slot": slot, "at": [at[0].round(), at[1].round()]}));
             }
@@ -289,9 +280,13 @@ fn mode_toggle(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
         }
     });
     ui.label(
-        egui::RichText::new(if cut { tl!("Cut: stashing removes the layers here, placing empties the slot") } else { tl!("Copy: stashing keeps the layers here, placing keeps the slot") })
-            .small()
-            .weak(),
+        egui::RichText::new(if cut {
+            tl!("Cut: stashing removes the layers here, placing empties the slot")
+        } else {
+            tl!("Copy: stashing keeps the layers here, placing keeps the slot")
+        })
+        .small()
+        .weak(),
     );
 }
 
@@ -343,37 +338,33 @@ pub(super) fn drag_strip(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     // A forgiving hit area: a moving finger overshoots.
     let hit = strip.expand(14.0).intersect(canvas);
     let over = pointer.is_some_and(|p| hit.contains(p));
-    egui::Area::new(egui::Id::unique("layer-tray-strip"))
-        .order(egui::Order::Foreground)
-        .fixed_pos(strip.min)
-        .interactable(false)
-        .show(&ctx, |ui| {
-            let resp = ui.interact(strip, ui.scope_id().with("strip"), Sense::hover());
-            resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, tl!("Layer Tray")));
-            let p = ui.painter();
-            let radius = CornerRadius::same(15);
-            p.rect_filled(strip, radius, if over { t.accent } else { t.card.gamma_multiply(0.97) });
-            p.rect_stroke(strip, radius, Stroke::new(if over { 1.5 } else { 1.0 }, if over { t.accent_text } else { t.card_border }), StrokeKind::Inside);
-            let tint = if over { t.accent_text } else { t.accent };
-            icons::paint(ui, Rect::from_center_size(pos2(strip.left() + 10.0 + icon / 2.0, strip.center().y), vec2(icon, icon)), "layers", icon, tint);
-            let (text, color) = if over { (&hint, t.accent_text) } else { (&idle, t.text) };
-            let galley = painter.layout_no_wrap(text.clone(), font, color);
-            let at = pos2(strip.left() + 10.0 + icon + 6.0, strip.center().y - galley.size().y / 2.0);
-            ui.painter().galley(at, galley, color);
-            let mut right = strip.right() - 10.0;
-            if let Some(pill_w) = pill {
-                let pr = Rect::from_center_size(pos2(right - pill_w / 2.0, strip.center().y), vec2(pill_w, 13.0));
-                p.rect_filled(pr, 6.5, if over { t.accent_text } else { t.accent });
-                p.text(pr.center(), Align2::CENTER_CENTER, digits.clone(), FontId::monospace(9.0), if over { t.accent } else { Color32::WHITE });
-                right -= pill_w + 6.0;
-            }
-            if let Some(mark) = &mode_mark {
-                let g = painter.layout_no_wrap(mark.clone(), FontId::proportional(10.0), if over { t.accent_text } else { t.text_dim });
-                let mr = Rect::from_min_max(pos2(right - g.size().x - 8.0, strip.center().y - 8.0), pos2(right, strip.center().y + 8.0));
-                p.rect_filled(mr, 8.0, if over { Color32::BLACK.gamma_multiply(0.15) } else { t.hover.gamma_multiply(0.5) });
-                ui.painter().galley(pos2(mr.left() + 4.0, mr.center().y - g.size().y / 2.0), g, if over { t.accent_text } else { t.text_dim });
-            }
-        });
+    egui::Area::new(egui::Id::unique("layer-tray-strip")).order(egui::Order::Foreground).fixed_pos(strip.min).interactable(false).show(&ctx, |ui| {
+        let resp = ui.interact(strip, ui.scope_id().with("strip"), Sense::hover());
+        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, tl!("Layer Tray")));
+        let p = ui.painter();
+        let radius = CornerRadius::same(15);
+        p.rect_filled(strip, radius, if over { t.accent } else { t.card.gamma_multiply(0.97) });
+        p.rect_stroke(strip, radius, Stroke::new(if over { 1.5 } else { 1.0 }, if over { t.accent_text } else { t.card_border }), StrokeKind::Inside);
+        let tint = if over { t.accent_text } else { t.accent };
+        icons::paint(ui, Rect::from_center_size(pos2(strip.left() + 10.0 + icon / 2.0, strip.center().y), vec2(icon, icon)), "layers", icon, tint);
+        let (text, color) = if over { (&hint, t.accent_text) } else { (&idle, t.text) };
+        let galley = painter.layout_no_wrap(text.clone(), font, color);
+        let at = pos2(strip.left() + 10.0 + icon + 6.0, strip.center().y - galley.size().y / 2.0);
+        ui.painter().galley(at, galley, color);
+        let mut right = strip.right() - 10.0;
+        if let Some(pill_w) = pill {
+            let pr = Rect::from_center_size(pos2(right - pill_w / 2.0, strip.center().y), vec2(pill_w, 13.0));
+            p.rect_filled(pr, 6.5, if over { t.accent_text } else { t.accent });
+            p.text(pr.center(), Align2::CENTER_CENTER, digits.clone(), FontId::monospace(9.0), if over { t.accent } else { Color32::WHITE });
+            right -= pill_w + 6.0;
+        }
+        if let Some(mark) = &mode_mark {
+            let g = painter.layout_no_wrap(mark.clone(), FontId::proportional(10.0), if over { t.accent_text } else { t.text_dim });
+            let mr = Rect::from_min_max(pos2(right - g.size().x - 8.0, strip.center().y - 8.0), pos2(right, strip.center().y + 8.0));
+            p.rect_filled(mr, 8.0, if over { Color32::BLACK.gamma_multiply(0.15) } else { t.hover.gamma_multiply(0.5) });
+            ui.painter().galley(pos2(mr.left() + 4.0, mr.center().y - g.size().y / 2.0), g, if over { t.accent_text } else { t.text_dim });
+        }
+    });
     if released
         && let Some(p) = pointer
         && hit.contains(p)

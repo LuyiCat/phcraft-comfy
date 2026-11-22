@@ -60,11 +60,7 @@ pub fn keep_screen_on() {
 /// Requesting a permission an OS does not know is filtered out, so one list serves every
 /// version.
 pub fn storage_permissions() -> &'static [&'static str] {
-    &[
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.READ_MEDIA_IMAGES",
-    ]
+    &["android.permission.READ_EXTERNAL_STORAGE", "android.permission.WRITE_EXTERNAL_STORAGE", "android.permission.READ_MEDIA_IMAGES"]
 }
 
 /// Whether read access holds (any of [`storage_permissions`] granted): the gallery lists, and
@@ -80,12 +76,7 @@ fn permission_granted(env: &mut jni::Env<'_>, activity: &JObject<'_>) -> Result<
         }
         let perm = env.new_string(name.to_owned())?;
         let granted = env
-            .call_method(
-                activity,
-                jni::jni_str!("checkSelfPermission"),
-                jni::jni_sig!("(Ljava/lang/String;)I"),
-                &[jni::objects::JValue::Object(&perm)],
-            )?
+            .call_method(activity, jni::jni_str!("checkSelfPermission"), jni::jni_sig!("(Ljava/lang/String;)I"), &[jni::objects::JValue::Object(&perm)])?
             .i()?;
         if granted == 0 {
             return Ok(true);
@@ -136,9 +127,7 @@ pub fn query_media_images() -> Result<Vec<MediaRow>, String> {
             .call_method(
                 &resolver,
                 jni::jni_str!("query"),
-                jni::jni_sig!(
-                    "(Landroid/net/Uri;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;)Landroid/database/Cursor;"
-                ),
+                jni::jni_sig!("(Landroid/net/Uri;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;)Landroid/database/Cursor;"),
                 &[
                     jni::objects::JValue::Object(&uri),
                     jni::objects::JValue::Object(&projection),
@@ -167,10 +156,7 @@ fn read_cursor(env: &mut jni::Env<'_>, cursor: &JObject<'_>) -> Result<Vec<Media
     let size_col = column_index(env, cursor, "_size")?;
     let modified_col = column_index(env, cursor, "date_modified")?;
     let mut rows = Vec::new();
-    let mut more = env
-        .call_method(cursor, jni::jni_str!("moveToFirst"), jni::jni_sig!("()Z"), &[])?
-        .i()?
-        != 0;
+    let mut more = env.call_method(cursor, jni::jni_str!("moveToFirst"), jni::jni_sig!("()Z"), &[])?.i()? != 0;
     while more && rows.len() < 500 {
         let id = cursor_long(env, cursor, id_col)?;
         let name = cursor_string(env, cursor, name_col).unwrap_or_else(|| format!("image {id}"));
@@ -178,10 +164,7 @@ fn read_cursor(env: &mut jni::Env<'_>, cursor: &JObject<'_>) -> Result<Vec<Media
         let size = cursor_long(env, cursor, size_col).unwrap_or(0);
         let modified = cursor_long(env, cursor, modified_col).unwrap_or(0);
         rows.push(MediaRow { id, name, mime, size, modified });
-        more = env
-            .call_method(cursor, jni::jni_str!("moveToNext"), jni::jni_sig!("()Z"), &[])?
-            .i()?
-            != 0;
+        more = env.call_method(cursor, jni::jni_str!("moveToNext"), jni::jni_sig!("()Z"), &[])?.i()? != 0;
     }
     Ok(rows)
 }
@@ -189,35 +172,18 @@ fn read_cursor(env: &mut jni::Env<'_>, cursor: &JObject<'_>) -> Result<Vec<Media
 /// `cursor.getColumnIndexOrThrow(name)`.
 fn column_index(env: &mut jni::Env<'_>, cursor: &JObject<'_>, name: &str) -> Result<i32, jni::errors::Error> {
     let key = env.new_string(name)?;
-    Ok(env
-        .call_method(
-            cursor,
-            jni::jni_str!("getColumnIndexOrThrow"),
-            jni::jni_sig!("(Ljava/lang/String;)I"),
-            &[jni::objects::JValue::Object(&key)],
-        )?
-        .i()?)
+    Ok(env.call_method(cursor, jni::jni_str!("getColumnIndexOrThrow"), jni::jni_sig!("(Ljava/lang/String;)I"), &[jni::objects::JValue::Object(&key)])?.i()?)
 }
 
 /// `cursor.getLong(column)` (zero for null).
 fn cursor_long(env: &mut jni::Env<'_>, cursor: &JObject<'_>, column: i32) -> Result<i64, jni::errors::Error> {
-    Ok(env
-        .call_method(cursor, jni::jni_str!("getLong"), jni::jni_sig!("(I)J"), &[jni::objects::JValue::Int(column)])?
-        .j()?)
+    Ok(env.call_method(cursor, jni::jni_str!("getLong"), jni::jni_sig!("(I)J"), &[jni::objects::JValue::Int(column)])?.j()?)
 }
 
 /// `cursor.getString(column)`; `None` for a null value (a null MIME is normal in MediaStore).
 fn cursor_string(env: &mut jni::Env<'_>, cursor: &JObject<'_>, column: i32) -> Option<String> {
-    let value = env
-        .call_method(
-            cursor,
-            jni::jni_str!("getString"),
-            jni::jni_sig!("(I)Ljava/lang/String;"),
-            &[jni::objects::JValue::Int(column)],
-        )
-        .ok()?
-        .l()
-        .ok()?;
+    let value =
+        env.call_method(cursor, jni::jni_str!("getString"), jni::jni_sig!("(I)Ljava/lang/String;"), &[jni::objects::JValue::Int(column)]).ok()?.l().ok()?;
     if value.as_raw().is_null() {
         return None;
     }
@@ -253,14 +219,7 @@ pub fn read_media_bytes(id: i64) -> Result<Vec<u8>, String> {
         let mut bytes = Vec::new();
         let chunk = env.new_byte_array(64 * 1024)?;
         loop {
-            let n = env
-                .call_method(
-                    &stream,
-                    jni::jni_str!("read"),
-                    jni::jni_sig!("([B)I"),
-                    &[jni::objects::JValue::Object(&chunk)],
-                )?
-                .i()?;
+            let n = env.call_method(&stream, jni::jni_str!("read"), jni::jni_sig!("([B)I"), &[jni::objects::JValue::Object(&chunk)])?.i()?;
             if n <= 0 {
                 break;
             }
@@ -302,14 +261,8 @@ pub fn media_thumbnail(id: i64, max: u32) -> Option<(u32, u32, Vec<u8>)> {
             .call_method(
                 &resolver,
                 jni::jni_str!("loadThumbnail"),
-                jni::jni_sig!(
-                    "(Landroid/net/Uri;Landroid/util/Size;Landroid/os/CancellationSignal;)Landroid/graphics/Bitmap;"
-                ),
-                &[
-                    jni::objects::JValue::Object(&uri),
-                    jni::objects::JValue::Object(&size),
-                    jni::objects::JValue::Object(&no_signal),
-                ],
+                jni::jni_sig!("(Landroid/net/Uri;Landroid/util/Size;Landroid/os/CancellationSignal;)Landroid/graphics/Bitmap;"),
+                &[jni::objects::JValue::Object(&uri), jni::objects::JValue::Object(&size), jni::objects::JValue::Object(&no_signal)],
             )?
             .l()?;
         if bitmap.as_raw().is_null() {
@@ -382,12 +335,7 @@ pub fn open_all_files_settings() -> Result<(), String> {
             jni::jni_sig!("(Ljava/lang/String;Landroid/net/Uri;)V"),
             &[jni::objects::JValue::Object(&action), jni::objects::JValue::Object(&uri)],
         )?;
-        env.call_method(
-            activity,
-            jni::jni_str!("startActivity"),
-            jni::jni_sig!("(Landroid/content/Intent;)V"),
-            &[jni::objects::JValue::Object(&intent)],
-        )?;
+        env.call_method(activity, jni::jni_str!("startActivity"), jni::jni_sig!("(Landroid/content/Intent;)V"), &[jni::objects::JValue::Object(&intent)])?;
         Ok(())
     })
 }
@@ -399,9 +347,7 @@ pub fn open_all_files_settings() -> Result<(), String> {
 pub fn clipboard_text() -> Option<String> {
     let text = with_activity(|env, activity| {
         let Some(manager) = clipboard_manager(env, activity)? else { return Ok(None) };
-        let clip = env
-            .call_method(&manager, jni::jni_str!("getPrimaryClip"), jni::jni_sig!("()Landroid/content/ClipData;"), &[])?
-            .l()?;
+        let clip = env.call_method(&manager, jni::jni_str!("getPrimaryClip"), jni::jni_sig!("()Landroid/content/ClipData;"), &[])?.l()?;
         if clip.is_null() {
             return Ok(None);
         }
@@ -409,14 +355,8 @@ pub fn clipboard_text() -> Option<String> {
         if count <= 0 {
             return Ok(None);
         }
-        let item = env
-            .call_method(
-                &clip,
-                jni::jni_str!("getItemAt"),
-                jni::jni_sig!("(I)Landroid/content/ClipData$Item;"),
-                &[jni::objects::JValue::Int(0)],
-            )?
-            .l()?;
+        let item =
+            env.call_method(&clip, jni::jni_str!("getItemAt"), jni::jni_sig!("(I)Landroid/content/ClipData$Item;"), &[jni::objects::JValue::Int(0)])?.l()?;
         if item.is_null() {
             return Ok(None);
         }
@@ -432,9 +372,7 @@ pub fn clipboard_text() -> Option<String> {
         if chars.is_null() {
             return Ok(None);
         }
-        let string = env
-            .call_method(&chars, jni::jni_str!("toString"), jni::jni_sig!("()Ljava/lang/String;"), &[])?
-            .l()?;
+        let string = env.call_method(&chars, jni::jni_str!("toString"), jni::jni_sig!("()Ljava/lang/String;"), &[])?.l()?;
         if string.is_null() {
             return Ok(None);
         }
@@ -460,12 +398,7 @@ pub fn set_clipboard_text(text: &str) {
                 &[jni::objects::JValue::Object(&label), jni::objects::JValue::Object(&value)],
             )?
             .l()?;
-        env.call_method(
-            &manager,
-            jni::jni_str!("setPrimaryClip"),
-            jni::jni_sig!("(Landroid/content/ClipData;)V"),
-            &[jni::objects::JValue::Object(&clip)],
-        )?;
+        env.call_method(&manager, jni::jni_str!("setPrimaryClip"), jni::jni_sig!("(Landroid/content/ClipData;)V"), &[jni::objects::JValue::Object(&clip)])?;
         Ok(())
     });
 }
@@ -487,9 +420,7 @@ fn clipboard_manager<'a>(env: &mut jni::Env<'a>, activity: &JObject<'_>) -> Resu
 
 /// `activity.getContentResolver()`.
 fn content_resolver<'a>(env: &mut jni::Env<'a>, activity: &JObject<'_>) -> Result<JObject<'a>, jni::errors::Error> {
-    Ok(env
-        .call_method(activity, jni::jni_str!("getContentResolver"), jni::jni_sig!("()Landroid/content/ContentResolver;"), &[])?
-        .l()?)
+    Ok(env.call_method(activity, jni::jni_str!("getContentResolver"), jni::jni_sig!("()Landroid/content/ContentResolver;"), &[])?.l()?)
 }
 
 /// `Uri.parse(text)`.
@@ -497,12 +428,7 @@ fn parse_uri<'a>(env: &mut jni::Env<'a>, text: &str) -> Result<JObject<'a>, jni:
     let text = env.new_string(text)?;
     let uri_class = env.find_class(jni::jni_str!("android/net/Uri"))?;
     Ok(env
-        .call_static_method(
-            &uri_class,
-            jni::jni_str!("parse"),
-            jni::jni_sig!("(Ljava/lang/String;)Landroid/net/Uri;"),
-            &[jni::objects::JValue::Object(&text)],
-        )?
+        .call_static_method(&uri_class, jni::jni_str!("parse"), jni::jni_sig!("(Ljava/lang/String;)Landroid/net/Uri;"), &[jni::objects::JValue::Object(&text)])?
         .l()?)
 }
 
@@ -523,9 +449,7 @@ fn string_array<'a>(env: &mut jni::Env<'a>, items: &[&str]) -> Result<jni::objec
 /// JNI call, so no error path may leave one behind. The callback's `Err` travels out as its
 /// string form. The activity reference's lifetime is independent of the environment's (it
 /// borrows the raw handle, not the frame).
-fn with_activity<T>(
-    run: impl for<'env, 'obj> FnOnce(&mut jni::Env<'env>, &JObject<'obj>) -> Result<T, jni::errors::Error>,
-) -> Result<T, String> {
+fn with_activity<T>(run: impl for<'env, 'obj> FnOnce(&mut jni::Env<'env>, &JObject<'obj>) -> Result<T, jni::errors::Error>) -> Result<T, String> {
     let Some(app) = app() else {
         return Err("the Android app handle is not initialized".into());
     };

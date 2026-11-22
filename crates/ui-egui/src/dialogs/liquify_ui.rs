@@ -785,10 +785,7 @@ fn resized_brush(start_size: f32, start_density: f32, dx: f32, dy: f32, zoom: f3
 pub fn pointer(app: &mut PhotocraftApp, ev: ToolEvent, mods: egui::Modifiers) {
     // Pen-only painting (the iPad shell): a finger never pushes, freezes, thaws or lassos —
     // every Liquify tool, like the brush tools outside (`preflight_tool_event`).
-    if app.pen_only_painting
-        && matches!(ev, ToolEvent::Down { .. })
-        && app.fingers.pointer_is_finger()
-    {
+    if app.pen_only_painting && matches!(ev, ToolEvent::Down { .. }) && app.fingers.pointer_is_finger() {
         app.ui.status = tl!("Painting needs the Apple Pencil").into();
         return;
     }

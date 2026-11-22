@@ -20,9 +20,7 @@
 use std::io::Read;
 use std::time::Duration;
 
-use photocraft_engine::comfy_cmds::{
-    image_api_base_url, image_api_images, ComfyCall, ComfyFn, ComfyReply, ComfyRequest, ImageApiImage,
-};
+use photocraft_engine::comfy_cmds::{ComfyCall, ComfyFn, ComfyReply, ComfyRequest, ImageApiImage, image_api_base_url, image_api_images};
 use serde_json::{Value, json};
 
 /// A JSON call (the model list) answers in seconds.
@@ -64,21 +62,19 @@ fn call(req: &ComfyRequest) -> std::result::Result<ComfyReply, String> {
             let base = image_api_base_url(base)?;
             Ok(ComfyReply::Json(get_json(&base, "/models", key, CALL_TIMEOUT)?))
         }
-        ComfyCall::SystemStats | ComfyCall::ObjectInfo | ComfyCall::Queue { .. } | ComfyCall::Interrupt | ComfyCall::History { .. }
-        | ComfyCall::Download { .. } | ComfyCall::Upload { .. } => Err(NO_SERVER.into()),
+        ComfyCall::SystemStats
+        | ComfyCall::ObjectInfo
+        | ComfyCall::Queue { .. }
+        | ComfyCall::Interrupt
+        | ComfyCall::History { .. }
+        | ComfyCall::Download { .. }
+        | ComfyCall::Upload { .. } => Err(NO_SERVER.into()),
     }
 }
 
 /// `POST /images/edits`: the source image, the model and the prompt as multipart form data (the
 /// OpenAI-compatible shape every relay accepts for image editing).
-fn post_edits(
-    base: &str,
-    key: &str,
-    model: &str,
-    prompt: &str,
-    png: &[u8],
-    timeout: Duration,
-) -> std::result::Result<Value, String> {
+fn post_edits(base: &str, key: &str, model: &str, prompt: &str, png: &[u8], timeout: Duration) -> std::result::Result<Value, String> {
     use ureq::unversioned::multipart::{Form, Part};
     let part = Part::bytes(png).file_name("photocraft.png").mime_str("image/png").map_err(|e| format!("internal multipart error: {e}"))?;
     let form = Form::new().text("model", model).text("prompt", prompt).part("image", part);
@@ -135,11 +131,7 @@ fn read_json(resp: std::result::Result<ureq::http::Response<ureq::Body>, ureq::E
 
 fn read_body(resp: ureq::http::Response<ureq::Body>) -> std::result::Result<Vec<u8>, String> {
     let mut body = Vec::new();
-    resp.into_body()
-        .into_reader()
-        .take(REPLY_MAX)
-        .read_to_end(&mut body)
-        .map_err(|e| format!("reading the reply: {e}"))?;
+    resp.into_body().into_reader().take(REPLY_MAX).read_to_end(&mut body).map_err(|e| format!("reading the reply: {e}"))?;
     Ok(body)
 }
 
@@ -169,9 +161,7 @@ mod tests {
             ComfyCall::Download { filename: "f".into(), subfolder: String::new(), kind: "output".into() },
             ComfyCall::Upload { name: "n".into(), bytes: Vec::new() },
         ] {
-            let Err(e) = t(&ComfyRequest { url: "https://x.example".into(), call }) else {
-                panic!("the ComfyUI protocol must be refused, not answered")
-            };
+            let Err(e) = t(&ComfyRequest { url: "https://x.example".into(), call }) else { panic!("the ComfyUI protocol must be refused, not answered") };
             assert!(e.contains("Image API"), "{e}");
         }
     }

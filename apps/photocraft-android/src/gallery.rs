@@ -169,12 +169,7 @@ impl GalleryTab {
         // previews beats a burst of jank.
         let _ = std::thread::Builder::new().spawn(move || {
             while let Ok(id) = rx.recv() {
-                let item = items
-                    .lock()
-                    .unwrap_or_else(PoisonError::into_inner)
-                    .iter()
-                    .find(|i| i.id == id)
-                    .cloned();
+                let item = items.lock().unwrap_or_else(PoisonError::into_inner).iter().find(|i| i.id == id).cloned();
                 if let Some(item) = item {
                     let thumb = source.thumbnail(&item, 256);
                     pixels.lock().unwrap_or_else(PoisonError::into_inner).insert(id, thumb);
@@ -275,14 +270,11 @@ impl GalleryTab {
         // Scroll, not paging: the gallery holds hundreds of rows and the finger expects to
         // throw them. The touch UI's widened scroll bar comes with the shell's preference.
         let row_height = 56.0_f32;
-        egui::ScrollArea::vertical()
-            .id_salt("gallery-rows")
-            .auto_shrink([false, false])
-            .show_rows(ui, row_height, items.len(), |ui, range| {
-                for item in items[range].iter() {
-                    self.draw_row(ui, item);
-                }
-            });
+        egui::ScrollArea::vertical().id_salt("gallery-rows").auto_shrink([false, false]).show_rows(ui, row_height, items.len(), |ui, range| {
+            for item in items[range].iter() {
+                self.draw_row(ui, item);
+            }
+        });
     }
 
     /// One full-width button row: the thumbnail, the name, the kind and the size. A button
@@ -292,8 +284,7 @@ impl GalleryTab {
         let label = row_label(item);
         let clicked = match self.thumbnail_texture(ui, item) {
             Some(texture) => {
-                let image = egui::Image::new(egui::load::SizedTexture::new(texture.id(), egui::vec2(48.0, 48.0)))
-                    .fit_to_exact_size(egui::vec2(48.0, 48.0));
+                let image = egui::Image::new(egui::load::SizedTexture::new(texture.id(), egui::vec2(48.0, 48.0))).fit_to_exact_size(egui::vec2(48.0, 48.0));
                 ui.add_enabled(!disabled, egui::Button::image_and_text(image, label)).clicked()
             }
             None => ui.add_enabled(!disabled, egui::Button::new(label)).clicked(),
@@ -376,11 +367,7 @@ impl AndroidMediaStore {
 #[cfg(target_os = "android")]
 impl GallerySource for AndroidMediaStore {
     fn permission(&self) -> GalleryPermission {
-        if crate::platform::storage_permission_granted() {
-            GalleryPermission::Granted
-        } else {
-            GalleryPermission::Missing
-        }
+        if crate::platform::storage_permission_granted() { GalleryPermission::Granted } else { GalleryPermission::Missing }
     }
 
     fn request_permission(&self) -> Result<(), String> {
@@ -389,15 +376,7 @@ impl GallerySource for AndroidMediaStore {
 
     fn list(&self) -> Result<Vec<GalleryItem>, String> {
         crate::platform::query_media_images().map(|rows| {
-            rows.into_iter()
-                .map(|row| GalleryItem {
-                    id: row.id,
-                    name: row.name,
-                    mime: row.mime,
-                    size: row.size,
-                    modified: row.modified,
-                })
-                .collect()
+            rows.into_iter().map(|row| GalleryItem { id: row.id, name: row.name, mime: row.mime, size: row.size, modified: row.modified }).collect()
         })
     }
 

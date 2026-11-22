@@ -8,7 +8,7 @@
 
 use std::time::Duration;
 
-use egui::{Event, Pos2, PointerButton, TouchId, TouchPhase};
+use egui::{Event, PointerButton, Pos2, TouchId, TouchPhase};
 
 /// How long the finger must hold still before the synthetic right-click fires (Android's own
 /// long-press is 0.5 s).
@@ -200,7 +200,13 @@ mod tests {
         assert_eq!(secondary_fired(&events), 1);
 
         // The finger moves over the menu and lifts: none of it may click through.
-        let mut events = vec![touch(7, TouchPhase::Move, at + egui::vec2(3.0, 0.0)), Event::PointerMoved(at + egui::vec2(3.0, 0.0)), touch(7, TouchPhase::End, at), primary(at, false), Event::PointerGone];
+        let mut events = vec![
+            touch(7, TouchPhase::Move, at + egui::vec2(3.0, 0.0)),
+            Event::PointerMoved(at + egui::vec2(3.0, 0.0)),
+            touch(7, TouchPhase::End, at),
+            primary(at, false),
+            Event::PointerGone,
+        ];
         lp.frame(&mut events, Some(1.8));
         assert!(events.is_empty(), "no click-through from the release");
 
