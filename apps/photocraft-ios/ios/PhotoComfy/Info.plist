@@ -37,6 +37,10 @@
 	<array>
 		<integer>2</integer>
 	</array>
+	<!-- The editing canvas and touch chrome assume the whole screen; partial-screen iPad
+	     multitasking leaves too little room for the panels and canvas controls. -->
+	<key>UIRequiresFullScreen</key>
+	<true/>
 	<key>UIFileSharingEnabled</key>
 	<true/>
 	<!-- With UIFileSharingEnabled this makes the app's Documents appear under 我的 iPad / On My
