@@ -114,8 +114,7 @@ pub struct Comfy {
 
 /// The fixed choices the built-in workflows offer (samplers every ComfyUI ships).
 pub const SAMPLERS: &[&str] = &["euler", "euler_ancestral", "dpmpp_2m", "dpmpp_2m_sde", "ddim", "uni_pc"];
-pub const SCHEDULERS: &[&str] =
-    &["normal", "karras", "exponential", "sgm_uniform", "simple", "beta", "ddim_uniform"];
+pub const SCHEDULERS: &[&str] = &["normal", "karras", "exponential", "sgm_uniform", "simple", "beta", "ddim_uniform"];
 
 /// Prompt length cap: diffusion prompts are a few hundred words; megabyte strings are hostile.
 const PROMPT_MAX: usize = 8_000;
@@ -174,11 +173,7 @@ pub struct GenParams {
 
 /// A JSON number that also accepts numeric strings (dialog fields send both); finite only.
 fn num(p: &Value, key: &str) -> Option<f64> {
-    p.get(key).and_then(|v| {
-        v.as_f64()
-            .or_else(|| v.as_str().and_then(|s| s.trim().parse::<f64>().ok()))
-            .filter(|f| f.is_finite())
-    })
+    p.get(key).and_then(|v| v.as_f64().or_else(|| v.as_str().and_then(|s| s.trim().parse::<f64>().ok())).filter(|f| f.is_finite()))
 }
 
 fn clamped(p: &Value, key: &str, lo: f64, hi: f64) -> Option<f64> {
@@ -388,11 +383,7 @@ pub struct Picked {
 /// usable UNET layout. The error lists what the server has, so it is actionable.
 pub fn pick(params: &GenParams, models: &ServerModels) -> Result<Picked> {
     let list = |names: &[String], what: &str| {
-        if names.is_empty() {
-            format!("no {what}")
-        } else {
-            format!("{what}: {}", names.iter().take(4).cloned().collect::<Vec<_>>().join(", "))
-        }
+        if names.is_empty() { format!("no {what}") } else { format!("{what}: {}", names.iter().take(4).cloned().collect::<Vec<_>>().join(", ")) }
     };
     let nothing = || {
         EngineError::Other(format!(
@@ -528,10 +519,7 @@ pub fn workflow(picked: &Picked, p: &GenParams, seed: u64, latent: Latent) -> Va
                 json!({"class_type": "UNETLoader", "inputs": {"unet_name": picked.model, "weight_dtype": "default"}})
             };
             graph.insert("11".into(), loader);
-            graph.insert(
-                "10".into(),
-                json!({"class_type": "ModelSamplingAuraFlow", "inputs": {"model": ["11", 0], "shift": p.shift}}),
-            );
+            graph.insert("10".into(), json!({"class_type": "ModelSamplingAuraFlow", "inputs": {"model": ["11", 0], "shift": p.shift}}));
         }
         Family::Flux => {
             let loader = if picked.gguf {
@@ -540,18 +528,18 @@ pub fn workflow(picked: &Picked, p: &GenParams, seed: u64, latent: Latent) -> Va
                 json!({"class_type": "UNETLoader", "inputs": {"unet_name": picked.model, "weight_dtype": "default"}})
             };
             graph.insert("11".into(), loader);
-            graph.insert("10".into(), json!({"class_type": "ModelSamplingFlux", "inputs": {
-                "model": ["11", 0], "max_shift": 1.15, "base_shift": 0.5, "width": latent_width, "height": latent_height}}));
+            graph.insert(
+                "10".into(),
+                json!({"class_type": "ModelSamplingFlux", "inputs": {
+                "model": ["11", 0], "max_shift": 1.15, "base_shift": 0.5, "width": latent_width, "height": latent_height}}),
+            );
         }
     }
     // The conditioning chain ("20" positive, "30" negative; CLIP output slot 1 on Classic).
     let clip = match picked.family {
         Family::Classic => json!(["10", 1]),
         Family::Qwen => {
-            graph.insert(
-                "12".into(),
-                json!({"class_type": "CLIPLoader", "inputs": {"clip_name": picked.clip, "type": "qwen_image", "device": "default"}}),
-            );
+            graph.insert("12".into(), json!({"class_type": "CLIPLoader", "inputs": {"clip_name": picked.clip, "type": "qwen_image", "device": "default"}}));
             json!(["12", 0])
         }
         Family::Flux => {
@@ -583,15 +571,21 @@ pub fn workflow(picked: &Picked, p: &GenParams, seed: u64, latent: Latent) -> Va
         }
         Latent::Uploaded { name, .. } => {
             graph.insert("51".into(), json!({"class_type": "LoadImage", "inputs": {"image": name, "upload": "image"}}));
-            graph.insert("52".into(), json!({"class_type": "ImageScale", "inputs": {
-                "upscale_method": "bilinear", "width": latent_width, "height": latent_height, "crop": "disabled", "image": ["51", 0]}}));
+            graph.insert(
+                "52".into(),
+                json!({"class_type": "ImageScale", "inputs": {
+                "upscale_method": "bilinear", "width": latent_width, "height": latent_height, "crop": "disabled", "image": ["51", 0]}}),
+            );
             graph.insert("50".into(), json!({"class_type": "VAEEncode", "inputs": {"pixels": ["52", 0], "vae": vae}}));
         }
     }
-    graph.insert("60".into(), json!({"class_type": "KSampler", "inputs": {
+    graph.insert(
+        "60".into(),
+        json!({"class_type": "KSampler", "inputs": {
         "seed": seed, "steps": steps, "cfg": cfg, "sampler_name": sampler, "scheduler": scheduler,
         "denoise": if p.mode == Mode::Image { p.denoise } else { 1.0 },
-        "model": ["10", 0], "positive": ["20", 0], "negative": ["30", 0], "latent_image": ["50", 0]}}));
+        "model": ["10", 0], "positive": ["20", 0], "negative": ["30", 0], "latent_image": ["50", 0]}}),
+    );
     graph.insert("70".into(), json!({"class_type": "VAEDecode", "inputs": {"samples": ["60", 0], "vae": vae}}));
     graph.insert("80".into(), json!({"class_type": "SaveImage", "inputs": {"filename_prefix": "photocraft", "images": ["70", 0]}}));
     Value::Object(graph)
@@ -636,9 +630,7 @@ pub fn history_error(history: &Value, prompt_id: &str) -> Option<String> {
 
 /// The transport, or why there is none (web, headless).
 pub(crate) fn transport_of(s: &Session) -> Result<ComfyFn> {
-    s.comfy.transport.clone().ok_or_else(|| {
-        EngineError::Other("ComfyUI generation needs the desktop app: it talks to a local ComfyUI server over HTTP".into())
-    })
+    s.comfy.transport.clone().ok_or_else(|| EngineError::Other("ComfyUI generation needs the desktop app: it talks to a local ComfyUI server over HTTP".into()))
 }
 
 /// The server base URL: the `url` param, else Preferences ▸ Integrations ▸ ComfyUI Server URL.
@@ -686,10 +678,7 @@ pub(crate) fn start_command(s: &Session, url: &str) -> Result<Option<String>> {
 
 /// Milliseconds since the epoch (0 if the clock is before it): upload names and client ids.
 pub(crate) fn now_millis() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 
 /// A varied seed from the clock (not crypto; it only has to differ between runs).
@@ -749,11 +738,7 @@ pub fn image_api_base_url(base: &str) -> std::result::Result<String, String> {
     if trimmed.len() > 2_000 {
         return Err("the Image API endpoint is too long".into());
     }
-    if trimmed.ends_with("/v1") {
-        Ok(trimmed.to_string())
-    } else {
-        Ok(format!("{trimmed}/v1"))
-    }
+    if trimmed.ends_with("/v1") { Ok(trimmed.to_string()) } else { Ok(format!("{trimmed}/v1")) }
 }
 
 /// The Image API preferences, validated. Bounded like every other preference string.
@@ -799,9 +784,7 @@ pub fn image_api_images(v: &Value) -> std::result::Result<Vec<ImageApiImage>, St
                 return Err(format!("the reply's image is over the {} MiB limit", IMAGE_MAX / 1_048_576));
             }
             use base64::Engine as _;
-            let bytes = base64::engine::general_purpose::STANDARD
-                .decode(b64)
-                .map_err(|e| format!("decoding the reply's b64_json: {e}"))?;
+            let bytes = base64::engine::general_purpose::STANDARD.decode(b64).map_err(|e| format!("decoding the reply's b64_json: {e}"))?;
             out.push(ImageApiImage::Bytes(bytes));
         } else if let Some(url) = entry.get("url").and_then(Value::as_str) {
             if url.len() > 8_000 || !(url.starts_with("http://") || url.starts_with("https://")) {
@@ -842,14 +825,7 @@ pub(crate) struct Generation {
 /// The generation, on the worker thread: read the server's models, build and queue the workflow,
 /// wait for the server, download the outputs. `ctx` reports progress and carries cancellation (an
 /// escape also asks the server to stop sampling).
-fn run_generation(
-    ctx: &JobCtx,
-    transport: &ComfyFn,
-    url: &str,
-    p: &GenParams,
-    doc: Option<&Document>,
-    client_id: &str,
-) -> Result<Generation> {
+fn run_generation(ctx: &JobCtx, transport: &ComfyFn, url: &str, p: &GenParams, doc: Option<&Document>, client_id: &str) -> Result<Generation> {
     let call = |c: ComfyCall| transport(&ComfyRequest { url: url.to_string(), call: c });
     ctx.progress(0.02, "Contacting ComfyUI…");
     let v = json_of(call(ComfyCall::ObjectInfo).map_err(|e| at("reading ComfyUI's models", e))?)?;
@@ -869,7 +845,10 @@ fn run_generation(
                     let (png, uw, uh) = super::comfy_workflow_cmds::upload_png(doc, "photocraft.png")?;
                     let (w, h) = (snap_to(uw, multiple), snap_to(uh, multiple));
                     if w == 0 || h == 0 {
-                        return Err(bad("ai.comfyui.generate", format!("the {} × {} document is smaller than one {multiple}×{multiple} latent tile", doc.size.width, doc.size.height)));
+                        return Err(bad(
+                            "ai.comfyui.generate",
+                            format!("the {} × {} document is smaller than one {multiple}×{multiple} latent tile", doc.size.width, doc.size.height),
+                        ));
                     }
                     let name = format!("photocraft-{}.png", now_millis());
                     let v = json_of(call(ComfyCall::Upload { name: name.clone(), bytes: png }).map_err(|e| at("uploading the source image", e))?)?;
@@ -934,13 +913,19 @@ pub(crate) fn queue_and_collect(
             for image in images {
                 let get = |k: &str| image.get(k).and_then(Value::as_str).unwrap_or_default().to_string();
                 ctx.check()?;
-                let bytes = bytes_of(call(ComfyCall::Download { filename: get("filename"), subfolder: get("subfolder"), kind: get("type") })
-                    .map_err(|e| at("downloading the generated image", e))?)?;
+                let bytes = bytes_of(
+                    call(ComfyCall::Download { filename: get("filename"), subfolder: get("subfolder"), kind: get("type") })
+                        .map_err(|e| at("downloading the generated image", e))?,
+                )?;
                 if bytes.is_empty() {
                     return Err(EngineError::Other("ComfyUI returned an empty image".into()));
                 }
                 if bytes.len() as u64 > IMAGE_MAX {
-                    return Err(EngineError::Other(format!("the generated image is {} MiB, over the {} MiB limit", bytes.len() / 1_048_576, IMAGE_MAX / 1_048_576)));
+                    return Err(EngineError::Other(format!(
+                        "the generated image is {} MiB, over the {} MiB limit",
+                        bytes.len() / 1_048_576,
+                        IMAGE_MAX / 1_048_576
+                    )));
                 }
                 total = total.saturating_add(bytes.len() as u64);
                 if total > IMAGES_MAX {
@@ -953,7 +938,10 @@ pub(crate) fn queue_and_collect(
         }
         if waited >= limit_ms {
             let _ = call(ComfyCall::Interrupt);
-            return Err(EngineError::Other(format!("ComfyUI did not finish within {} s (raise `timeout`, or check its window — one generation runs at a time)", limit_ms / 1000)));
+            return Err(EngineError::Other(format!(
+                "ComfyUI did not finish within {} s (raise `timeout`, or check its window — one generation runs at a time)",
+                limit_ms / 1000
+            )));
         }
         poll_sleep();
         waited += POLL_MS;
@@ -1090,8 +1078,8 @@ fn check(s: &mut Session, p: &Value) -> Result<Value> {
         return Ok(json!({"url": cfg.base, "api": true, "model": cfg.model, "modelFound": offered, "server": v}));
     }
     let url = url_of(s, p)?;
-    let v = json_of(transport(&ComfyRequest { url: url.clone(), call: ComfyCall::SystemStats })
-        .map_err(|e| at(&format!("ComfyUI at {url} did not answer"), e))?)?;
+    let v =
+        json_of(transport(&ComfyRequest { url: url.clone(), call: ComfyCall::SystemStats }).map_err(|e| at(&format!("ComfyUI at {url} did not answer"), e))?)?;
     Ok(json!({"url": url, "server": v}))
 }
 
@@ -1101,8 +1089,7 @@ fn models(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let transport = transport_of(s)?;
     let url = url_of(s, p)?;
-    let v = json_of(transport(&ComfyRequest { url: url.clone(), call: ComfyCall::ObjectInfo })
-        .map_err(|e| at(&format!("asking {url} for its models"), e))?)?;
+    let v = json_of(transport(&ComfyRequest { url: url.clone(), call: ComfyCall::ObjectInfo }).map_err(|e| at(&format!("asking {url} for its models"), e))?)?;
     let mut r = parse_object_info(&v).to_json();
     if let Some(o) = r.as_object_mut() {
         o.insert("url".into(), json!(url));
@@ -1195,23 +1182,13 @@ mod tests {
                 "qwen-image-2.1-turbo-Q8_0.gguf".into(),
                 "wan2.1-i2v-14b-480p-Q5_K_M.gguf".into(),
             ],
-            clips: vec![
-                "clip_l.safetensors".into(),
-                "qwen_2.5_vl_7b_fp8_scaled.safetensors".into(),
-                "umt5_xxl_fp8_e4m3fn_scaled.safetensors".into(),
-            ],
-            vaes: vec![
-                "ae.safetensors".into(),
-                "qwen_image_vae.safetensors".into(),
-            ],
+            clips: vec!["clip_l.safetensors".into(), "qwen_2.5_vl_7b_fp8_scaled.safetensors".into(), "umt5_xxl_fp8_e4m3fn_scaled.safetensors".into()],
+            vaes: vec!["ae.safetensors".into(), "qwen_image_vae.safetensors".into()],
         }
     }
 
     fn classic_models() -> ServerModels {
-        ServerModels {
-            checkpoints: vec!["sd_xl_refiner.safetensors".into(), "a.safetensors".into()],
-            ..ServerModels::default()
-        }
+        ServerModels { checkpoints: vec!["sd_xl_refiner.safetensors".into(), "a.safetensors".into()], ..ServerModels::default() }
     }
 
     #[test]
@@ -1313,7 +1290,11 @@ mod tests {
 
     #[test]
     fn classic_workflow_wired_by_node_id() {
-        let w = built(json!({"prompt": "a red boat", "negative": "blurry", "steps": 30, "seed": 77}), &classic_models(), Latent::Empty { width: 1024, height: 1024 });
+        let w = built(
+            json!({"prompt": "a red boat", "negative": "blurry", "steps": 30, "seed": 77}),
+            &classic_models(),
+            Latent::Empty { width: 1024, height: 1024 },
+        );
         assert_eq!(w.pointer("/10/inputs/ckpt_name"), Some(&json!("sd_xl_refiner.safetensors")));
         assert_eq!(w.pointer("/20/inputs/text"), Some(&json!("a red boat")));
         assert_eq!(w.pointer("/30/inputs/clip"), Some(&json!(["10", 1])));
@@ -1347,7 +1328,11 @@ mod tests {
         assert_eq!(w.pointer("/70/inputs/vae"), Some(&json!(["13", 0])));
         // Explicit values override the family defaults; img2img wires the uploaded image and
         // the asked denoise.
-        let w = built(json!({"mode": "image", "denoise": 0.5, "steps": 20}), &gguf_models(), Latent::Uploaded { name: "photocraft-1.png".into(), width: 1000, height: 520 });
+        let w = built(
+            json!({"mode": "image", "denoise": 0.5, "steps": 20}),
+            &gguf_models(),
+            Latent::Uploaded { name: "photocraft-1.png".into(), width: 1000, height: 520 },
+        );
         assert_eq!(w.pointer("/51/class_type"), Some(&json!("LoadImage")));
         assert_eq!(w.pointer("/51/inputs/image"), Some(&json!("photocraft-1.png")));
         assert_eq!(w.pointer("/52/inputs/width"), Some(&json!(992)));

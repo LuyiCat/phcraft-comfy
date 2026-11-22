@@ -6,14 +6,7 @@ use super::{DialogKind, Map, PhotocraftApp, Value, json};
 /// The continuation of Place Embedded / Place Linked once the Files picker delivered `bytes`:
 /// refocus the document, place the file, and start Free Transform when the layer lands
 /// synchronously (in the background, `jobs_ui::track_place` starts it when the layer arrives).
-fn place_picked(
-    app: &mut PhotocraftApp,
-    name: &str,
-    bytes: Vec<u8>,
-    linked: bool,
-    doc: crate::DocId,
-    ctx: &egui::Context,
-) -> Result<Value, String> {
+fn place_picked(app: &mut PhotocraftApp, name: &str, bytes: Vec<u8>, linked: bool, doc: crate::DocId, ctx: &egui::Context) -> Result<Value, String> {
     if app.ui.transform.is_some() {
         return Err("Commit or cancel the transform first".into());
     }
@@ -380,9 +373,7 @@ pub(super) fn front(app: &mut PhotocraftApp, ctx: &egui::Context, id: &str, para
             };
             let linked = id == "file.placeLinked";
             let ctx = ctx.clone();
-            Some(app.pick_file_bytes(move |app, name, bytes| {
-                place_picked(app, &name, bytes, linked, doc, &ctx)
-            }))
+            Some(app.pick_file_bytes(move |app, name, bytes| place_picked(app, &name, bytes, linked, doc, &ctx)))
         }
         "layer.smartObjects.replaceContents" => {
             let st = app.session.active()?;

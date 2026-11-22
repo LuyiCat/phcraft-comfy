@@ -129,10 +129,7 @@ pub struct ComfyQueue {
 // ------------------------------------------------------------------ helpers
 
 fn now_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 
 /// The parsed seed the entry holds (None: random).
@@ -205,10 +202,7 @@ const FILL_PHRASES: &[Phrase] = &[
     Phrase {
         label: "高清分辨率",
         text: "{v}",
-        values: &[
-            ("8K", "8K UHD, ultra high detail"),
-            ("16K", "16K ultra high definition, extreme detail"),
-        ],
+        values: &[("8K", "8K UHD, ultra high detail"), ("16K", "16K ultra high definition, extreme detail")],
         default_on: false,
     },
 ];
@@ -254,11 +248,7 @@ fn phrase_text(state: &ComfyPanelState, p: &Phrase) -> String {
         return if phrase_on(state, p) { p.text.to_string() } else { String::new() };
     }
     let picked = state.template_pick.get(p.label).map(String::as_str).unwrap_or("");
-    p.values
-        .iter()
-        .find(|(l, _)| *l == picked)
-        .map(|(_, t)| p.text.replace("{v}", t))
-        .unwrap_or_default()
+    p.values.iter().find(|(l, _)| *l == picked).map(|(_, t)| p.text.replace("{v}", t)).unwrap_or_default()
 }
 
 /// The live composition of the moment: the user's own words first, then the template's phrases.
@@ -281,11 +271,7 @@ pub fn compose_prompt(state: &ComfyPanelState) -> String {
 /// The prompt a run actually sends: the edited full prompt when the panel holds one (the user
 /// typed their own version into the Full prompt box), else the live composition.
 pub fn effective_prompt(state: &ComfyPanelState) -> String {
-    if state.full_prompt.trim().is_empty() {
-        compose_prompt(state)
-    } else {
-        state.full_prompt.trim().to_string()
-    }
+    if state.full_prompt.trim().is_empty() { compose_prompt(state) } else { state.full_prompt.trim().to_string() }
 }
 
 /// Enqueue `batch` tasks from the current options.
@@ -335,13 +321,7 @@ fn schedule(app: &mut PhotocraftApp) {
                 t.state = "done".into();
                 t.results = (t.results_before..shelf).collect();
                 t.used_seed = app.session.comfy.results.last().map(|r| r.seed);
-                t.seconds = app
-                    .session
-                    .comfy
-                    .results
-                    .last()
-                    .map(|r| now_ms().saturating_sub(r.created_ms) / 1000)
-                    .unwrap_or(0);
+                t.seconds = app.session.comfy.results.last().map(|r| now_ms().saturating_sub(r.created_ms) / 1000).unwrap_or(0);
             } else {
                 t.state = "failed".into();
                 t.error = if status_error && !status.is_empty() { status } else { "generation did not produce an image".into() };
@@ -554,17 +534,19 @@ fn workflow(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         ui.strong("Workflow");
         let entries: Vec<(String, bool)> = app.comfy_queue.workflows.iter().map(|w| (w.0.clone(), w.1)).collect();
-        let selected = if app.ui.comfy_panel.workflow.is_empty() { entries.first().map(|w| w.0.clone()).unwrap_or_default() } else { app.ui.comfy_panel.workflow.clone() };
-        craft_ui::ComboBox::from_id_salt("comfy-workflow").selected_text(if selected.is_empty() { "(none — import one)".to_string() } else { selected.clone() }).show_ui(ui, |ui| {
-            for (name, builtin) in &entries {
-                let label = if *builtin { format!("{name} (built-in)") } else { name.clone() };
-                ui.selectable_value(&mut app.ui.comfy_panel.workflow, name.clone(), label).clicked();
-            }
-        });
+        let selected =
+            if app.ui.comfy_panel.workflow.is_empty() { entries.first().map(|w| w.0.clone()).unwrap_or_default() } else { app.ui.comfy_panel.workflow.clone() };
+        craft_ui::ComboBox::from_id_salt("comfy-workflow")
+            .selected_text(if selected.is_empty() { "(none — import one)".to_string() } else { selected.clone() })
+            .show_ui(ui, |ui| {
+                for (name, builtin) in &entries {
+                    let label = if *builtin { format!("{name} (built-in)") } else { name.clone() };
+                    ui.selectable_value(&mut app.ui.comfy_panel.workflow, name.clone(), label).clicked();
+                }
+            });
         // Imported workflows need the store folder (the config dir's `comfy_workflows`): without
         // one (the iPad app) there is nowhere to import into — and only ComfyUI graphs to import.
-        let can_import =
-            app.session.comfy.workflows_dir.is_some() || !app.session.prefs().integrations.comfy_workflows_dir.trim().is_empty();
+        let can_import = app.session.comfy.workflows_dir.is_some() || !app.session.prefs().integrations.comfy_workflows_dir.trim().is_empty();
         if can_import && ui.button("Import…").clicked() {
             let _ = app.pick_file_bytes_filtered(&["json"], |app, name, _bytes| {
                 let r = app.run("ai.comfyui.workflows.import", json!({"path": name})).map_err(|e| e.to_string())?;
@@ -616,10 +598,7 @@ fn source(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     ui.strong("Send");
     ui.horizontal(|ui| {
         for (key, label) in [("canvas", "Composite"), ("layer", "Active layer"), ("selection", "Selection crop")] {
-            if ui
-                .selectable_value(&mut app.ui.comfy_panel.source, key.to_string(), label)
-                .clicked()
-            {
+            if ui.selectable_value(&mut app.ui.comfy_panel.source, key.to_string(), label).clicked() {
                 persist_options(app);
             }
         }
@@ -740,11 +719,7 @@ fn prompt(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     let r = egui::TextEdit::multiline(&mut show).desired_rows(3).desired_width(f32::INFINITY).font(egui::TextStyle::Monospace).show(ui);
     if r.response.changed() {
         // Back to the composition when the edit matches it or the box is emptied.
-        app.ui.comfy_panel.full_prompt = if show.trim().is_empty() || show.trim() == composed {
-            String::new()
-        } else {
-            show.clone()
-        };
+        app.ui.comfy_panel.full_prompt = if show.trim().is_empty() || show.trim() == composed { String::new() } else { show.clone() };
         persist_options(app);
     }
 }
@@ -887,14 +862,8 @@ fn queue(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
 // ---- result gallery
 
 fn gallery(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
-    let shelf: Vec<(usize, u64, u64, String)> = app
-        .session
-        .comfy
-        .results
-        .iter()
-        .enumerate()
-        .map(|(i, r)| (i, r.created_ms, r.seed, r.workflow.clone()))
-        .collect();
+    let shelf: Vec<(usize, u64, u64, String)> =
+        app.session.comfy.results.iter().enumerate().map(|(i, r)| (i, r.created_ms, r.seed, r.workflow.clone())).collect();
     if shelf.is_empty() {
         return;
     }
@@ -1043,7 +1012,14 @@ mod tests {
     #[test]
     fn atmosphere_template_is_the_full_fog_set() {
         let p = compose_prompt(&state("atmosphere", ""));
-        for needle in ["volumetric fog to the scene", "enhance the volumetric fog effect", "depth of the scene", "floating dust particles", "atmospheric perspective", "strictly keep the person unchanged"] {
+        for needle in [
+            "volumetric fog to the scene",
+            "enhance the volumetric fog effect",
+            "depth of the scene",
+            "floating dust particles",
+            "atmospheric perspective",
+            "strictly keep the person unchanged",
+        ] {
             assert!(p.contains(needle), "missing `{needle}` in {p}");
         }
         // One lock turned off is honoured.

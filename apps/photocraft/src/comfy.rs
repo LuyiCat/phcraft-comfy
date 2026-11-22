@@ -49,11 +49,9 @@ fn call(url: &str, call: &ComfyCall) -> Result<ComfyReply, String> {
             let path = format!("/history/{}", path_segment(prompt_id)?);
             Ok(ComfyReply::Json(get_json(url, &path)?))
         }
-        ComfyCall::Download { filename, subfolder, kind } => Ok(ComfyReply::Bytes(get_bytes(
-            url,
-            "/view",
-            &[("filename", filename), ("subfolder", subfolder), ("type", kind)],
-        )?)),
+        ComfyCall::Download { filename, subfolder, kind } => {
+            Ok(ComfyReply::Bytes(get_bytes(url, "/view", &[("filename", filename), ("subfolder", subfolder), ("type", kind)])?))
+        }
         ComfyCall::Upload { name, bytes } => Ok(ComfyReply::Json(upload(url, name, bytes)?)),
         // Auto-start: probe, launch, wait. Loopback only — the engine gates it too, but a
         // transport must never run a launch command pointed at somebody else's machine.
@@ -110,16 +108,9 @@ fn get_bytes(url: &str, path: &str, queries: &[(&str, &str)]) -> Result<Vec<u8>,
 
 fn upload(url: &str, name: &str, bytes: &[u8]) -> Result<Value, String> {
     use ureq::unversioned::multipart::{Form, Part};
-    let part = Part::bytes(bytes)
-        .file_name(name)
-        .mime_str("image/png")
-        .map_err(|e| format!("internal multipart error: {e}"))?;
+    let part = Part::bytes(bytes).file_name(name).mime_str("image/png").map_err(|e| format!("internal multipart error: {e}"))?;
     let form = Form::new().text("overwrite", "true").part("image", part);
-    let resp = ureq::post(&format!("{url}/upload/image"))
-        .config()
-        .timeout_global(Some(DOWNLOAD_TIMEOUT))
-        .build()
-        .send(form);
+    let resp = ureq::post(&format!("{url}/upload/image")).config().timeout_global(Some(DOWNLOAD_TIMEOUT)).build().send(form);
     read_json(resp)
 }
 

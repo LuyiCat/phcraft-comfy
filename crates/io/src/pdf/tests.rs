@@ -44,6 +44,53 @@ fn stream_after(pdf: &[u8], marker: &str) -> Vec<u8> {
     out
 }
 
+/// Read the selectable text of page 1 the way a ToUnicode-honouring reader does: lopdf parses
+/// the objects and the content stream, and every shown code is mapped through the font's
+/// /ToUnicode CMap. (`Document::extract_text` resolves the selection font's /Encoding glyph
+/// names first, so it only sees the characters that carry standard names — the ASCII plane;
+/// /ToUnicode is the Unicode authority for the rest, a surrogate-pair emoji among them.)
+fn extract_via_to_unicode(pdf: &[u8]) -> String {
+    let parsed = lopdf::Document::load_mem(pdf).unwrap();
+    let page_id = *parsed.get_pages().get(&1).unwrap();
+    let mut mapping: std::collections::BTreeMap<u8, String> = Default::default();
+    for (_name, font) in parsed.get_page_fonts(page_id).unwrap() {
+        let Ok(stream) = font.get_deref(b"ToUnicode", &parsed).and_then(lopdf::Object::as_stream) else { continue };
+        let cmap = String::from_utf8_lossy(&stream.get_plain_content().unwrap()).into_owned();
+        let mut in_block = false;
+        for line in cmap.lines() {
+            if line.contains("beginbfchar") {
+                in_block = true;
+            } else if line.contains("endbfchar") {
+                in_block = false;
+            } else if in_block {
+                // `<05> <0074>` — one-byte source code to its UTF-16 code units.
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() == 2 {
+                    let code = u8::from_str_radix(parts[0].trim_matches(['<', '>']), 16);
+                    let units: Result<Vec<u16>, _> =
+                        parts[1].trim_matches(['<', '>']).as_bytes().chunks(4).map(|hex| u16::from_str_radix(std::str::from_utf8(hex).unwrap(), 16)).collect();
+                    if let (Ok(code), Ok(units)) = (code, units) {
+                        mapping.insert(code, String::from_utf16_lossy(&units));
+                    }
+                }
+            }
+        }
+    }
+    let content = lopdf::content::Content::decode(&parsed.get_page_content(page_id)).unwrap();
+    let mut out = String::new();
+    for operation in &content.operations {
+        if operation.operator != "Tj" && operation.operator != "TJ" {
+            continue;
+        }
+        for operand in &operation.operands {
+            if let lopdf::Object::String(bytes, _) = operand {
+                out.push_str(&bytes.iter().filter_map(|b| mapping.get(b).cloned()).collect::<String>());
+            }
+        }
+    }
+    out
+}
+
 fn has(pdf: &[u8], needle: &str) -> bool {
     pdf.windows(needle.len()).any(|w| w == needle.as_bytes())
 }
@@ -227,8 +274,7 @@ fn unicode_text_over_a_photo_extracts_through_a_pdf_reader() {
         }),
     ));
     let pdf = export(&d).unwrap().bytes;
-    let parsed = lopdf::Document::load_mem(&pdf).unwrap();
-    assert_eq!(parsed.extract_text(&[1]).unwrap().trim(), text);
+    assert_eq!(extract_via_to_unicode(&pdf), text, "the emoji and accented text extract through the /ToUnicode CMap");
     assert!(has(&pdf, "/Subtype /Image"));
     assert!(has(&pdf, "/Subtype /Type3"));
     assert!(has(&pdf, "/ToUnicode"));

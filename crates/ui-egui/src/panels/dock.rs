@@ -76,10 +76,7 @@ fn touch_drawer(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing = vec2(4.0, 2.0);
                 for (index, label) in tabs.iter().enumerate() {
-                    if ui
-                        .selectable_label(index == tab, egui::RichText::new(tl!(label)).text_style(egui::TextStyle::Small))
-                        .clicked()
-                    {
+                    if ui.selectable_label(index == tab, egui::RichText::new(tl!(label)).text_style(egui::TextStyle::Small)).clicked() {
                         *group.tab_mut(&mut app.ui.dock_tabs) = index;
                     }
                 }

@@ -576,4 +576,4 @@ fn a_frames_image_moves_to_another_frame() {
     let d = s.active().unwrap();
     assert_eq!(d.doc.layer(f1).unwrap().children().unwrap()[0].id, image, "undo puts it back");
     assert!(d.doc.layer(f2).unwrap().children().unwrap().is_empty());
-} 
+}

@@ -28,11 +28,7 @@ pub(crate) fn filter_preview_factor(app: &PhotocraftApp, doc: &Document, cmd: &s
     // does: their CPUs are the slowest the app runs on, and honouring the view's zoom meant a
     // full-resolution filter per settled slider change — seconds on a phone, with the preview
     // never arriving. The preview is drawn at its own factor, so the canvas shows it upscaled.
-    if cfg!(target_arch = "wasm32") || crate::touch::on(app) {
-        k
-    } else {
-        crate::proxy::view_factor(k, app.current_zoom())
-    }
+    if cfg!(target_arch = "wasm32") || crate::touch::on(app) { k } else { crate::proxy::view_factor(k, app.current_zoom()) }
 }
 
 /// Live preview for an open filter dialog: run the filter on the proxy and upload it. With
@@ -332,7 +328,8 @@ mod factor_tests {
         // #6326 caps the desktop's preview at the view's zoom, so 100 % meant a full-resolution
         // filter per settled slider change — seconds on a phone, where the preview never arrived.
         // The Touch Interface keeps the document's proxy at every zoom instead, as the web does.
-        let doc = photocraft_doc::Document::new("big", photocraft_doc::Size::new(6000, 4500), photocraft_color::ColorMode::Rgb, photocraft_color::SampleType::U8);
+        let doc =
+            photocraft_doc::Document::new("big", photocraft_doc::Size::new(6000, 4500), photocraft_color::ColorMode::Rgb, photocraft_color::SampleType::U8);
         let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
         let cmd = "filter.blur.gaussianBlur";
         let params = json!({"radius": 8.0});
