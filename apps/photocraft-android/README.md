@@ -114,10 +114,15 @@ Or send the APK itself (chat, drive, mail): the receiver opens it and allows "in
 apps" for that source once. **Nothing expires** — Android has no Apple-style provisioning
 profile, so one install keeps working; sign updates with the same keystore
 (`android/debug.keystore`, already gitignored) or every update forces an uninstall first.
-`versionCode` is still 1 for every build; raise it in `android/build.sh` when you want Android
-to treat a rebuild as an update over an existing install. Note that the keystore is generated
-per checkout: an APK built on another machine signs differently, so installing it over an
-existing install fails ("app not installed") until the old one is uninstalled. Chat apps also
+`versionCode` is `VERSION_CODE` in `android/build.sh`, raised by one for every release so
+Android treats each build as an update over an existing install. Note that the default
+keystore is generated per checkout: an APK built on another machine signs differently, so
+installing it over an existing install fails ("app not installed") until the old one is
+uninstalled. Official releases sign with the fixed release keystore instead: point
+`PHOTOCOMFY_ANDROID_KEYSTORE` at it, with the passwords in
+`PHOTOCOMFY_ANDROID_KEYSTORE_PASS` / `PHOTOCOMFY_ANDROID_KEY_PASS` — the GitHub release
+workflow (`.github/workflows/release.yml`) builds and signs the published APK exactly that
+way. Chat apps also
 mangle APK transfers (renamed `.apk.1`, stripped); copy over USB, a drive app, or a cable.
 
 ## Diagnostics

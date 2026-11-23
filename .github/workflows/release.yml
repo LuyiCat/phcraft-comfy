@@ -1,8 +1,11 @@
 name: Release
 
+# Tag-driven releases (agent.md › 基于 tag 的发布流程): pushing an annotated `vX.Y.Z` tag
+# builds every platform and assembles one draft GitHub Release with a SHA256SUMS.txt over all
+# assets; the Android APK rides the same `release-*` artifact pattern as the desktop builds.
 on:
   push:
-    branches: [release]
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       version:
@@ -46,8 +49,146 @@ jobs:
       WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
       AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
       AZURE_SIGNING_ENDPOINT: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
       AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
       AZURE_CERT_PROFILE: ${{ secrets.AZURE_CERT_PROFILE }}
       LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
+
+  # Cross-compiles, signs and verifies the PhotoComfy APK (agent.md › Android 发布要求):
+  # the fixed release keystore comes from secrets, the signature and metadata are checked, and
+  # the artifact joins the `release-*` set the desktop release job attaches to the draft
+  # release — SHA256SUMS.txt therefore covers the APK too.
+  android:
+    needs: credits
+    timeout-minutes: 120
+    name: android (arm64 apk)
+    runs-on: ubuntu-latest
+    env:
+      # Same pinned central fonts as the desktop and CI builds, so CJK and other non-Latin
+      # interface text ships with real glyphs (crates/text/build.rs).
+      CRAFT_FONTS_DIR: ${{ github.workspace }}/craft-fonts
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The artifact holds contributors/contributors.json; downloading at the repo root
+      # restores the path every source build bundles.
+      - name: Install the contributor snapshot
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.credits.outputs.artifact-name }}
+          path: .
+
+      - name: Check out craft-fonts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: storytold/craft-fonts
+          ref: b076417b5880bd4154bd22f00695b1d28c6bea83
+          path: craft-fonts
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          targets: aarch64-linux-android
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: release-android
+          cache-on-failure: true
+
+      - uses: taiki-e/install-action@4a76afe23f9e08d2d9550fb56e556444e8611d21 # v2.90.4
+        with:
+          tool: cargo-ndk
+
+      # Manual test runs only: the desktop jobs rewrite the workspace the same way; tag pushes
+      # read the version the release commit already set.
+      - name: Apply version override
+        if: inputs.version != ''
+        env:
+          VERSION: ${{ inputs.version }}
+        run: cargo xtask version set "$VERSION"
+
+      - name: Resolve the version
+        id: version
+        run: |
+          VERSION="$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)"
+          test -n "$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the release signing key
+        run: printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+
+      - name: Build and sign the APK
+        env:
+          PHOTOCOMFY_ANDROID_KEYSTORE: ${{ runner.temp }}/release.keystore
+          PHOTOCOMFY_ANDROID_KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          PHOTOCOMFY_ANDROID_KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: apps/photocraft-android/android/build.sh out/android
+
+      - name: Verify the signed APK
+        run: |
+          set -euo pipefail
+          BT="$(ls -d "$ANDROID_HOME/build-tools"/* | sort | tail -1)"
+          "$BT/apksigner" verify --print-certs out/android/PhotoComfy.apk
+          badging="$("$BT/aapt2" dump badging out/android/PhotoComfy.apk)"
+          echo "$badging" | grep -F "package: name='com.photocomfy.app'" \
+            | grep -F "versionName='${{ steps.version.outputs.version }}'"
+          echo "$badging" | grep -F "native-code: 'arm64-v8a'"
+
+      - name: Name the release artifact
+        run: cp out/android/PhotoComfy.apk "PhotoComfy-${{ steps.version.outputs.version }}-android-arm64.apk"
+
+      - name: Upload the release artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-android
+          path: PhotoComfy-*-android-arm64.apk
+          if-no-files-found: error
+
+  # The desktop release job skips when any platform build fails, which would leave a built APK
+  # without a release. This fallback assembles an Android-only draft (same shape as the shared
+  # draft-release action: draft, generated notes, checksums over every asset) so a pushed tag
+  # always yields a downloadable PhotoComfy APK. When the desktop release succeeds it stays
+  # skipped, and its draft already carries the APK.
+  android-release:
+    needs: [release, android]
+    if: always() && needs.android.result == 'success' && needs.release.result != 'success'
+    timeout-minutes: 10
+    name: android-only draft release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-android
+          path: assets
+
+      - name: Compute checksums
+        working-directory: assets
+        run: sha256sum -- * > SHA256SUMS.txt
+
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION_OVERRIDE: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ -n "$VERSION_OVERRIDE" ]; then
+            VERSION="$VERSION_OVERRIDE"
+          elif [ "${GITHUB_REF_TYPE:-}" = tag ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)"
+          fi
+          test -n "$VERSION"
+          if ! gh release view "v$VERSION" >/dev/null 2>&1; then
+            gh release create "v$VERSION" --draft --title "PhotoCraft v$VERSION" \
+              --target "$GITHUB_SHA" --generate-notes
+          fi
+          gh release upload "v$VERSION" --clobber assets/*
