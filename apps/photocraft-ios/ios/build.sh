@@ -152,7 +152,7 @@ cp "$BIN" "$APP/$PRODUCT"
 # standalone they get the same values the target's settings carry.
 if [ ! -f "$APP/Info.plist" ]; then
     sed -e "s/\$(EXECUTABLE_NAME)/$PRODUCT/" \
-        -e "s/\$(PRODUCT_BUNDLE_IDENTIFIER)/photocomfy/" \
+        -e "s/\$(PRODUCT_BUNDLE_IDENTIFIER)/photoComfy/" \
         -e "s/\$(MARKETING_VERSION)/1.0.4/" \
         -e "s/\$(CURRENT_PROJECT_VERSION)/5/" \
         "$(dirname "$0")/PhotoComfy/Info.plist" > "$APP/Info.plist"
