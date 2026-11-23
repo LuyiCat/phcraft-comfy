@@ -97,7 +97,7 @@ fi
 VERSION="$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)"
 [ -n "$VERSION" ] || VERSION="0.0.0"
 # The store build number: raise by one for every release, never reuse or rewind it.
-VERSION_CODE="${VERSION_CODE:-2}"
+VERSION_CODE="${VERSION_CODE:-3}"
 
 echo "building lib${LIB}.so for $TARGET ($PROFILE)…"
 cargo ndk -t "$ABI" -P "$API" build --profile "$PROFILE" -p photocraft-android
