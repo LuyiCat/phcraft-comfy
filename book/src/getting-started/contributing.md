@@ -1,5 +1,13 @@
 # Contributing
 
+> This page describes contributing to the upstream PhotoCraft repository. This fork is a
+> single-maintainer cross-platform adaptation repository: its Git workflow, commit format, and
+> verification boundaries are governed by the fork's [`agent.md`](https://github.com/huairuiLove/phcraft-comfy/blob/main/agent.md), which
+> replaces pull-request-based contributing and default-new-test requirements with direct `main`
+> commits and minimal necessary verification (§7). The code invariants below (clean-room, error
+> handling over panics, engine commands, WebAssembly compatibility, asset attribution) remain
+> in force for the shared Rust core.
+
 Read [`AGENTS.md`](https://github.com/storytold/photocraft/blob/main/AGENTS.md) and the existing [contribution guide](https://github.com/storytold/photocraft/blob/main/docs/contributing.md) before editing source. Those files define the clean-room policy, crate layering, command checklist, testing requirements, naming, and visual verification rules.
 
 Important repository invariants include:

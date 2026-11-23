@@ -1,11 +1,13 @@
 # Release security
 
-PhotoCraft's release workflow builds platform packages and a draft GitHub Release from the `release` branch. The authoritative process is [`docs/releasing.md`](https://github.com/storytold/photocraft/blob/main/docs/releasing.md).
+This fork releases from `main` via annotated `vX.Y.Z` tags and GitHub Releases; the authoritative process is the fork's [`agent.md`](https://github.com/huairuiLove/phcraft-comfy/blob/main/agent.md) (§10/§10.1), summarized in [`docs/releasing.md`](https://github.com/huairuiLove/phcraft-comfy/blob/main/docs/releasing.md). The long-lived `release` branch is no longer used as a release line: the release workflow now triggers on `v*` tag pushes (or a controlled manual run with a version override) and builds the Android APK alongside the desktop packages.
+
+The elements below describe the current release workflow.
 
 ## Implemented workflow elements
 
 - platform-specific signing/notarization steps exist for macOS and Windows;
-- signing secrets are scoped through the GitHub `release` environment;
+- desktop signing secrets are scoped through the GitHub `release` environment of the shared release workflow; the Android signing secrets are repository-level;
 - the Azure Trusted Signing client that Windows signing loads is pinned to a version and SHA-256, and refused on a mismatch;
 - release artifacts include `SHA256SUMS.txt`;
 - the final release job receives `contents: write`, while build jobs use narrower access;

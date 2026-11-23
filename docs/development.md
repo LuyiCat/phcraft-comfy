@@ -1,5 +1,7 @@
 # Development guide
 
+> 上游 PhotoCraft 开发指南，描述上游软件本身的构建、字体、GPU、性能与环境变量，保留不动。本仓库（PhotoComfy 跨平台适配仓库）的门禁与验证范围以 [`../agent.md`](../agent.md) 为准：三端构建命令见其第 8 节，最小必要验证见第 7 节——普通改动不运行 `cargo xtask test-corpus`、全工作区测试或无关平台的构建；只有修改共享代码且无法从条件编译确认平台范围时才扩大验证。
+
 ## Prerequisites
 
 - Rust stable (1.95+). Add the web target with `rustup target add wasm32-unknown-unknown`.

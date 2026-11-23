@@ -1,5 +1,7 @@
 # Contributing
 
+> 上游 PhotoCraft 的贡献指南，描述上游仓库的规则（每个改动必加测试、语料测试、PR 截图、`AGENTS.md`）。这些流程约定在本仓库已由 [`../agent.md`](../agent.md) 取代：单人维护、直接提交 `main`（不以 Pull Request 为必经流程）、最小必要验证（第 7 节）、默认不新增测试（第 7.3 节）、不为普通改动运行语料或全工作区测试（第 7.2 节）。本仓库不为上游 PhotoCraft 核心功能补充测试；下文仅在参与上游开发时适用。其中长期有效、继续遵守的约定：clean-room、非测试代码不 panic、用户可见行为走引擎命令、`cargo xtask layers` 层级检查、素材许可与 `ATTRIBUTION.md` 登记。
+
 - **Language:** Rust only. No JavaScript or TypeScript. On the web, `wasm-bindgen` generates a small loader; never hand-write JS.
 - **Licence:** contributions are MIT OR Apache-2.0 (`LICENSE-MIT`, `LICENSE-APACHE`, `NOTICE`). The ArtCraft logos in `docs/brand/` are not open source (`docs/brand/LICENSE-brand.txt`).
 - **Clean-room:** do not copy code, shaders, icons, ICC profiles or other assets from proprietary software (such as Photoshop). Match behaviour and look by observation and public specs. Only use assets with permissive licences, keep their license next to the asset (e.g. `assets/fonts/OFL-*.txt`, `assets/icons/LICENSE-lucide.txt`), and list every asset in `ATTRIBUTION.md`. **Fonts** live in [storytold/craft-fonts](https://github.com/storytold/craft-fonts), never in this repo: add new fonts there, and build with them through the optional `CRAFT_FONTS_DIR` build input (`docs/development.md` › Fonts).

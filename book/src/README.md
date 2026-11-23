@@ -2,7 +2,7 @@
 
 PhotoCraft is a native image editor written in Rust. This book is the maintained entry point for installation, architecture, formats, automation, development, and security documentation.
 
-The repository's existing `docs/` directory remains authoritative for detailed design notes, parity reports, UI conventions, release procedures, and the complete control-protocol method reference. The book links to those documents instead of copying them.
+The repository's existing `docs/` directory remains authoritative for detailed design notes, parity reports, UI conventions, and the complete control-protocol method reference. Git workflow, branching, releases, and versioning are governed by the fork's `agent.md`, summarized in `docs/releasing.md`. The book links to those documents instead of copying them.
 
 ## Start here
 
@@ -16,7 +16,7 @@ The repository's existing `docs/` directory remains authoritative for detailed d
 
 Coding agents should read the following in order:
 
-1. [`AGENTS.md`](https://github.com/storytold/photocraft/blob/main/AGENTS.md) for repository rules and verification gates.
+1. [`agent.md`](https://github.com/huairuiLove/phcraft-comfy/blob/main/agent.md) for this fork's repository rules, Git workflow, release process, and verification scope. The upstream [`AGENTS.md`](https://github.com/storytold/photocraft/blob/main/AGENTS.md) describes the upstream core's rules and applies only to upstream development.
 2. [`README.md`](https://github.com/storytold/photocraft/blob/main/README.md) for product scope and current entry points.
 3. [`book/src/architecture/`](architecture/overview.md) for crate boundaries and command flow.
 4. [`book/src/automation/`](automation/overview.md) before driving the CLI, control protocol, or MCP server.

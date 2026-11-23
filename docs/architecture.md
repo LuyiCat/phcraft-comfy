@@ -10,7 +10,8 @@ What exists on `main` today. The numbered sections below are the original design
 - **Workspace:** 25 library crates under `crates/`, 4 apps (`photocraft` desktop, `photocraft-cli`,
   `photocraft-web`, `photocraft-web-boot`), `xtask`, an example plug-in and 5 fuzz crates; ~539,000 lines of Rust in
   ~1,310 files; ~8,040 `#[test]` functions (ui-egui 2,809, engine 1,796, algo 572, io 539,
-  codecs 426, psd 341), counted 2026-10-13. Crate map and layers: [`AGENTS.md`](../AGENTS.md) §2 and
+  codecs 426, psd 341), counted 2026-10-13. Crate map and layers: the upstream
+  [`AGENTS.md`](https://github.com/storytold/photocraft/blob/main/AGENTS.md) §2 and
   `xtask/src/layers.rs` (enforced by `cargo xtask layers`).
 - **UI toolkit:** decided: egui/eframe on wgpu (no webview, no JavaScript). The same Rust builds
   to WebAssembly for the browser (trunk + wasm-bindgen).

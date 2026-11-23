@@ -19,6 +19,15 @@
   in a native app written entirely in Rust. Open source, offline, and yours.
 </p>
 
+> [!NOTE]
+> **About this fork:** this repository (`huairuiLove/phcraft-comfy`) is the cross-platform
+> adaptation fork of PhotoCraft, targeting iOS / Android / macOS. The iOS and Android apps are
+> unified as **PhotoComfy** (machine name `photocomfy`); the macOS desktop app stays
+> **PhotoCraft**. Repository and release conventions (single `main` branch, `vX.Y.Z` tag-based
+> releases, commit format, minimal verification) are defined in [`agent.md`](agent.md); the
+> upstream product documentation below and in [`docs/`](docs/) and [`book/`](book/src/README.md)
+> is kept as-is for the shared Rust core.
+
 <p align="center">
   <img alt="100% Rust" src="https://img.shields.io/badge/100%25-Rust-b7410e?style=flat-square&logo=rust">
   <img alt="macOS · Windows · Linux · FreeBSD · Web" src="https://img.shields.io/badge/macOS%20%C2%B7%20Windows%20%C2%B7%20Linux%20%C2%B7%20FreeBSD%20%C2%B7%20Web-native-2f7bf5?style=flat-square">
@@ -273,7 +282,7 @@ git clone https://github.com/storytold/craft-fonts ../craft-fonts
 CRAFT_FONTS_DIR="$PWD/../craft-fonts" cargo run --release -p photocraft
 ```
 
-New contributors and AI agents: start with [`AGENTS.md`](AGENTS.md), then [`docs/`](docs/).
+New contributors and AI agents: start with [`agent.md`](agent.md) (this fork's Git, release and verification conventions), then [`docs/`](docs/).
 
 Installers for macOS, Windows, Linux, FreeBSD and the web are attached to each [GitHub release](https://github.com/storytold/photocraft/releases). On Linux you can pick an AppImage, a `.deb`, an `.rpm`, a tarball or a Flatpak bundle. The bundle needs the freedesktop runtime from [Flathub](https://flathub.org/setup), which `flatpak` offers to install along with it:
 
@@ -284,7 +293,7 @@ flatpak run ai.storyteller.photocraft
 
 The Flatpak prints through the host's CUPS socket (File › Print talks IPP to it directly, no `lp` needed); without CUPS, or without a printer, File › Print opens the system print dialog through the print portal. See [printing](docs/printing.md).
 
-The AppImage needs no install: the first run registers its launcher icon and menu entry in `~/.local/share` so the dock shows PhotoCraft's icon on Wayland. Set `PHOTOCRAFT_NO_DESKTOP_INTEGRATION=1` to skip that, and see [`docs/releasing.md`](docs/releasing.md) › Linux to undo it.
+The AppImage needs no install: the first run registers its launcher icon and menu entry in `~/.local/share` so the dock shows PhotoCraft's icon on Wayland. Set `PHOTOCRAFT_NO_DESKTOP_INTEGRATION=1` to skip that, and see the [upstream release documentation](https://github.com/storytold/photocraft/blob/main/docs/releasing.md) › Linux to undo it.
 
 To use the bundled CLI, run `./photocraft-<version>-linux-x86_64.AppImage --cli --help`, or `--cli mcp` to start the MCP server on stdio. CLI launches skip desktop integration. A symlink named `photocraft-cli` also selects the CLI; see [`docs/development.md`](docs/development.md#headless-cli).
 
@@ -306,7 +315,7 @@ tar -xzf photocraft-<version>-freebsd-x86_64.tar.gz --strip-components 1 -C /usr
 photocraft
 ```
 
-Maintainers: [`docs/releasing.md`](docs/releasing.md) explains how releases are built, signed and published.
+Maintainers: releases in this fork follow [`agent.md`](agent.md) §9–§11 — a unified SemVer line, `vX.Y.Z` annotated tags on `main`, GitHub Releases for Android (`PhotoComfy-<version>-android-arm64.apk`) and macOS (`PhotoCraft-<version>-macos-universal.dmg`), and AIGC-free App Store Connect uploads. [`docs/releasing.md`](docs/releasing.md) summarizes the process.
 
 > [!IMPORTANT]
 > **Status:** PhotoCraft is in early alpha, and we want to be straight about where it stands: much of Photoshop's feature surface exists in some form, but **it is not yet a Photoshop replacement for daily professional work**. The biggest gaps are AI/generative features, 15 missing tools, depth in typography and pro workflows, and plug-in compatibility. Every Photoshop menu item is wired to a command ([`docs/parity-checklist.md`](docs/parity-checklist.md)), but that measures wiring, not behaviour. The honest, dimension-by-dimension picture and where we're going next are in the [roadmap](ROADMAP.md) and [parity assessment](docs/target-app-parity.md). Expect rough edges, and please file issues (include your OS, document size, layer count and a screenshot). You can also tell us what broke on [Discord](https://discord.gg/artcraft).
