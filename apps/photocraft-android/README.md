@@ -13,8 +13,10 @@ the contact's pressure — a finger's as much as a stylus's, and no tool type �
 (`Stylus::fingers_report_force`, which the shell turns on): every contact is a finger, and two
 fingers pan and pinch the canvas and stand the tool down, as on iPadOS, while a quick two-finger
 flick sideways undoes (left) or redoes (right) — one gesture shared by Android and iPadOS
-(`crates/ui-egui/src/canvas/two_finger_swipe.rs`). `touch_twins` de-duplicates double-delivered
-taps in `raw_input_hook`.
+(`crates/ui-egui/src/canvas/two_finger_swipe.rs`). Two fingers at once are a gesture until the
+last lifts, never egui's own press-and-hold (`PenContacts` in `input/stylus.rs`): fingers resting
+before a pan open no menu under the first. `touch_twins` de-duplicates double-delivered taps in
+`raw_input_hook`.
 The touch quick-actions column (undo, redo, copy, cut, paste) is chrome like the canvas, not a
 window: every floating editor, menu and dialog covers it. The Touch Interface preference
 (`crates/engine/src/prefs.rs` `default_touch_ui`) is on by default on Android: magnified

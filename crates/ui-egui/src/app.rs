@@ -4,7 +4,7 @@ use super::{
     brush_picker, camera_raw_ui, canvas, comfy_panel, dds_options_ui, delete_layer_prompt, dialogs, discard_ui, distort_ui, dock, field_wheel, file_open,
     gpu_canvas, gpu_status, gradient_ui, histogram_panel, i18n, jobs_ui, jpeg_options_ui, json, kys_import, last_brush, layers_panel_ui, mask_thumbs_ui,
     mask_trash_prompt, monitor_status, native_menu, notices, open_prompt, paint_mouse, palette, panel_docking, panels, prefs_ui, preset_files_ui,
-    preset_panels, rasterize_prompt, screen_picker, shape_stroke_ui, shortcuts, single_line_drag, smart_svg_ui, state, stroke_trace, stylus, system_clipboard,
+    preset_panels, rasterize_prompt, screen_picker, shape_stroke_ui, shortcuts, single_line_drag, smart_svg_ui, state, stroke_trace, system_clipboard,
     targa_options_ui, text_field_menu, theme, tiff_options_ui, timeline_ui, titlebar, tool_cursor, tool_memory, transform_tool, type_panels_ui, type_tool,
     type_transform, updates_ui, vector_ui, view_cmds, wheel_nav, wide_angle_ui, widgets, work_area, workspace_ui,
 };
@@ -290,10 +290,10 @@ impl eframe::App for PhotocraftApp {
         // After the control channel's own events (`ui.type`) join the OS's, before any widget.
         widgets::cap_text_events(&mut raw_input.events);
         self.control_click.normalize(&mut raw_input.events, cfg!(target_os = "macos"));
-        // A pen held still is no touch screen's press-and-hold right click (stylus.rs). A finger's
-        // force is one too where fingers report a force (Android).
-        let pen_down = self.stylus.pen_contacts.observe(&raw_input.events, self.stylus.fingers_report_force);
-        stylus::pen_hold_is_no_right_click(ctx, pen_down);
+        // A pen held still is no touch screen's press-and-hold right click, nor two fingers:
+        // a gesture, not a hold (stylus.rs). A finger's force is a pen's only where fingers
+        // report none (Android).
+        let pen_down = self.stylus.pen_contacts.observe(ctx, &raw_input.events, self.stylus.fingers_report_force);
         // Keep pen navigation policy next to the contact classifier so every mobile shell gets
         // the same protection. The canvas consumes this before it handles wheel, pinch or the
         // Zoom tool for the frame.

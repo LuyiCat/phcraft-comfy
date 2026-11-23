@@ -453,22 +453,29 @@ impl Stylus {
 /// The touch contacts a pen makes, read from the raw input. egui takes every touch contact held
 /// still past `max_click_duration` (0.8 s) for a touch screen's press-and-hold: a secondary click
 /// (a context menu) that also drops the drag. On Windows a pen arrives as touch events, so a pen
-/// held still opened a context menu. A pen held still is just a pen, as in Photoshop.
+/// held still opened a context menu. A pen held still is just a pen, as in Photoshop. Two fingers
+/// held still are a gesture, not a press-and-hold either: the first finger's emulated press would
+/// open a menu under it while the two rest before a pan.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct PenContacts {
     /// Touch ids that moved without touching: only a pen hovers.
     hovering: Vec<egui::TouchId>,
     /// The contacts down, and whether each is a pen.
     down: Vec<(egui::TouchId, bool)>,
+    /// Two contacts were down at once and one still is. Kept until the last lifts: the first
+    /// finger's emulated press outlives the second finger, and egui counts a hold from the press.
+    gesture: bool,
 }
 
 /// Most touch ids [`PenContacts`] remembers (the oldest go first).
 const CONTACTS: usize = 16;
 
 impl PenContacts {
-    /// Follow a frame's touch events. True when a pen contact was down at any point of the frame.
-    /// A force is no sign of a pen when `fingers_report_force` (see [`Stylus::fingers_report_force`]).
-    pub(crate) fn observe(&mut self, events: &[egui::Event], fingers_report_force: bool) -> bool {
+    /// Follow a frame's touch events, and turn egui's touch press-and-hold off while it must not
+    /// fire (a pen is down, two fingers were down). True when a pen contact was down at any point
+    /// of the frame. A force is no sign of a pen when `fingers_report_force` (see
+    /// [`Stylus::fingers_report_force`]).
+    pub(crate) fn observe(&mut self, ctx: &egui::Context, events: &[egui::Event], fingers_report_force: bool) -> bool {
         let pressed = |f: &Option<f32>| !fingers_report_force && f.is_some_and(|f| f > 0.0);
         let mut pen = self.down.iter().any(|(_, p)| *p);
         for e in events {
@@ -500,16 +507,19 @@ impl PenContacts {
                 egui::TouchPhase::End | egui::TouchPhase::Cancel => self.down.retain(|(c, _)| c != id),
             }
         }
+        self.gesture = if self.down.is_empty() { false } else { self.gesture || self.down.len() >= 2 };
+        Self::held_is_no_right_click(ctx, pen || self.gesture);
         pen
     }
-}
 
-/// Turn egui's touch press-and-hold off while a pen contact is down (and through the frame it
-/// lifts in, so the release is the click a quick tap would be), back on otherwise for fingers.
-pub(crate) fn pen_hold_is_no_right_click(ctx: &egui::Context, pen_down: bool) {
-    let want = if pen_down { f64::INFINITY } else { egui::InputOptions::default().max_click_duration };
-    if ctx.options(|o| o.input_options.max_click_duration) != want {
-        ctx.options_mut(|o| o.input_options.max_click_duration = want);
+    /// Turn egui's touch press-and-hold off while `held` (a pen contact is down, or two fingers
+    /// were and one still is; through the frame the last one lifts in, so the release is the click
+    /// a quick tap would be), back on otherwise for a finger.
+    fn held_is_no_right_click(ctx: &egui::Context, held: bool) {
+        let want = if held { f64::INFINITY } else { egui::InputOptions::default().max_click_duration };
+        if ctx.options(|o| o.input_options.max_click_duration) != want {
+            ctx.options_mut(|o| o.input_options.max_click_duration = want);
+        }
     }
 }
 

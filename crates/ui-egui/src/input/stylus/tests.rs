@@ -1,35 +1,42 @@
 use super::*;
 
-/// Hold a touch contact still for 1.2 s over a click-sensing area, with the press-and-hold
-/// handling the app does in `raw_input_hook`. Did the area see a secondary click?
-fn held_contact_right_clicks(hover_first: bool, force: Option<f32>) -> bool {
+/// Hold a touch contact still for 1.5 s over a click-sensing area, with the press-and-hold
+/// handling the app does in `raw_input_hook`. Did the area see a secondary click? With
+/// `second_finger`, another contact is down from 0.3 s to 1.0 s while the first never moves.
+fn held_contact_right_clicks(hover_first: bool, force: Option<f32>, second_finger: bool) -> bool {
+    use egui::TouchPhase::{End, Move, Start};
     let ctx = egui::Context::default();
     let mut contacts = PenContacts::default();
     let mut right_clicked = false;
-    let ev = |phase, force| egui::Event::Touch { device_id: egui::TouchDeviceId(1), id: egui::TouchId(3), phase, pos: egui::pos2(50.0, 50.0), force };
+    let touch = |id, phase, pos, force| egui::Event::Touch { device_id: egui::TouchDeviceId(1), id: egui::TouchId(id), phase, pos, force };
+    let (at, beside) = (egui::pos2(50.0, 50.0), egui::pos2(150.0, 150.0));
     // A first frame lays the area out, so the press hits it.
     let mut frames = vec![(0.0, vec![])];
     if hover_first {
-        frames.push((0.05, vec![ev(egui::TouchPhase::Move, None), egui::Event::PointerMoved(egui::pos2(50.0, 50.0))]));
+        frames.push((0.05, vec![touch(3, Move, at, None), egui::Event::PointerMoved(at)]));
     }
     frames.push((
         0.1,
         vec![
-            ev(egui::TouchPhase::Start, force),
-            egui::Event::PointerMoved(egui::pos2(50.0, 50.0)),
-            egui::Event::PointerButton { pos: egui::pos2(50.0, 50.0), button: egui::PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::NONE },
+            touch(3, Start, at, force),
+            egui::Event::PointerMoved(at),
+            egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::NONE },
         ],
     ));
-    for t in [0.4, 0.7, 1.0, 1.3] {
-        frames.push((t, vec![]));
+    if second_finger {
+        frames.push((0.3, vec![touch(4, Start, beside, None)]));
+    }
+    for t in [0.4, 0.7, 1.0, 1.3, 1.6] {
+        // The second finger lifts at 1.0 s; the first is down throughout, past egui's 0.8 s.
+        let lift = (second_finger && t == 1.0).then(|| touch(4, End, beside, None));
+        frames.push((t, lift.into_iter().collect()));
     }
     for (time, mut events) in frames {
         // egui-winit emits the touch and its emulated pointer events together.
         let mut raw =
             egui::RawInput { time: Some(time), screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(200.0, 200.0))), ..Default::default() };
         raw.events.append(&mut events);
-        let pen = contacts.observe(&raw.events, false);
-        pen_hold_is_no_right_click(&ctx, pen);
+        contacts.observe(&ctx, &raw.events, false);
         let mut out = ctx.run_ui(raw, |ui| {
             let r = ui.allocate_rect(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(200.0, 200.0)), egui::Sense::click_and_drag());
             right_clicked |= r.secondary_clicked();
@@ -41,26 +48,59 @@ fn held_contact_right_clicks(hover_first: bool, force: Option<f32>) -> bool {
 
 #[test]
 fn a_held_pen_is_not_a_right_click_but_a_held_finger_still_is() {
-    assert!(held_contact_right_clicks(false, None), "a finger's press-and-hold is egui's context menu");
-    assert!(!held_contact_right_clicks(true, None), "a pen that hovered first");
-    assert!(!held_contact_right_clicks(false, Some(0.4)), "a contact that reports pressure");
+    assert!(held_contact_right_clicks(false, None, false), "a finger's press-and-hold is egui's context menu");
+    assert!(!held_contact_right_clicks(true, None, false), "a pen that hovered first");
+    assert!(!held_contact_right_clicks(false, Some(0.4), false), "a contact that reports pressure");
+}
+
+/// egui holds every touch contact to its press-and-hold, the first finger's emulated press too:
+/// two fingers resting before a pan opened a menu under the first at 0.8 s. Two at once are a
+/// gesture until the last lifts — the first finger's press outlives the second finger.
+#[test]
+fn two_fingers_held_still_are_a_gesture_not_a_press_and_hold() {
+    assert!(!held_contact_right_clicks(false, None, true), "no secondary click under the first finger, before or after the second lifts");
 }
 
 #[test]
 fn pen_contacts_follow_hover_force_and_lift() {
     use egui::TouchPhase::{Cancel, End, Move, Start};
     let t = |id, phase, force| egui::Event::Touch { device_id: egui::TouchDeviceId(1), id: egui::TouchId(id), phase, pos: egui::pos2(1.0, 1.0), force };
+    let ctx = egui::Context::default();
     let mut c = PenContacts::default();
-    assert!(!c.observe(&[t(1, Move, None)], false), "hovering is no contact");
-    assert!(c.observe(&[t(1, Start, None)], false));
-    assert!(c.observe(&[], false), "still down");
-    assert!(c.observe(&[t(1, End, None)], false), "the lift frame still counts");
-    assert!(!c.observe(&[], false));
+    assert!(!c.observe(&ctx, &[t(1, Move, None)], false), "hovering is no contact");
+    assert!(c.observe(&ctx, &[t(1, Start, None)], false));
+    assert!(c.observe(&ctx, &[], false), "still down");
+    assert!(c.observe(&ctx, &[t(1, End, None)], false), "the lift frame still counts");
+    assert!(!c.observe(&ctx, &[], false));
     // A finger, until it reports a force.
-    assert!(!c.observe(&[t(9, Start, None), t(9, Move, None)], false));
-    assert!(c.observe(&[t(9, Move, Some(0.5))], false));
-    assert!(c.observe(&[t(9, Cancel, None)], false));
-    assert!(!c.observe(&[], false));
+    assert!(!c.observe(&ctx, &[t(9, Start, None), t(9, Move, None)], false));
+    assert!(c.observe(&ctx, &[t(9, Move, Some(0.5))], false));
+    assert!(c.observe(&ctx, &[t(9, Cancel, None)], false));
+    assert!(!c.observe(&ctx, &[], false));
+}
+
+/// The gesture latch (`PenContacts::gesture`): set while two contacts are down at once, kept while
+/// one still is, cleared when the last lifts — and egui's press-and-hold is off meanwhile.
+#[test]
+fn two_contacts_at_once_keep_the_press_and_hold_off_until_the_last_lifts() {
+    use egui::TouchPhase::{Cancel, End, Start};
+    let ctx = egui::Context::default();
+    let t = |id, phase| egui::Event::Touch { device_id: egui::TouchDeviceId(1), id: egui::TouchId(id), phase, pos: egui::pos2(1.0, 1.0), force: None };
+    let hold = |ctx: &egui::Context| ctx.options(|o| o.input_options.max_click_duration);
+    let (quick, never) = (egui::InputOptions::default().max_click_duration, f64::INFINITY);
+    let mut c = PenContacts::default();
+    c.observe(&ctx, &[t(1, Start)], false);
+    assert!(!c.gesture);
+    assert_eq!(hold(&ctx), quick, "one finger may press-and-hold");
+    c.observe(&ctx, &[t(2, Start)], false);
+    assert!(c.gesture);
+    assert_eq!(hold(&ctx), never, "two at once may not");
+    c.observe(&ctx, &[t(2, End)], false);
+    assert!(c.gesture, "the first finger's press outlives the second");
+    assert_eq!(hold(&ctx), never);
+    c.observe(&ctx, &[t(1, Cancel)], false);
+    assert!(!c.gesture, "the last lifted");
+    assert_eq!(hold(&ctx), quick, "and the next finger may again");
 }
 
 /// Android's winit passes a finger's pressure as its force like a pen's, and drops the tool type:
@@ -69,17 +109,18 @@ fn pen_contacts_follow_hover_force_and_lift() {
 fn a_force_names_no_pen_where_fingers_report_one() {
     use egui::TouchPhase::{End, Move, Start};
     let t = |id, phase, force| egui::Event::Touch { device_id: egui::TouchDeviceId(1), id: egui::TouchId(id), phase, pos: egui::pos2(1.0, 1.0), force };
+    let ctx = egui::Context::default();
     let mut c = PenContacts::default();
-    assert!(!c.observe(&[t(1, Start, Some(0.5)), t(1, Move, Some(0.5))], true), "a finger with its pressure");
-    assert!(!c.observe(&[], true), "still down, still no pen");
-    assert!(!c.observe(&[t(1, End, None)], true));
+    assert!(!c.observe(&ctx, &[t(1, Start, Some(0.5)), t(1, Move, Some(0.5))], true), "a finger with its pressure");
+    assert!(!c.observe(&ctx, &[], true), "still down, still no pen");
+    assert!(!c.observe(&ctx, &[t(1, End, None)], true));
     // A pen that hovered first is still one.
-    assert!(!c.observe(&[t(2, Move, None)], true), "hovering is no contact");
-    assert!(c.observe(&[t(2, Start, Some(0.5))], true), "the hovering pen came down");
-    assert!(c.observe(&[t(2, End, None)], true), "the lift frame still counts");
+    assert!(!c.observe(&ctx, &[t(2, Move, None)], true), "hovering is no contact");
+    assert!(c.observe(&ctx, &[t(2, Start, Some(0.5))], true), "the hovering pen came down");
+    assert!(c.observe(&ctx, &[t(2, End, None)], true), "the lift frame still counts");
     // Everywhere else a force is a pen's: that is what read every Android finger as a pen.
-    assert!(!c.observe(&[], false));
-    assert!(c.observe(&[t(3, Start, Some(0.5))], false), "the cause: a finger's force read as a pen's");
+    assert!(!c.observe(&ctx, &[], false));
+    assert!(c.observe(&ctx, &[t(3, Start, Some(0.5))], false), "the cause: a finger's force read as a pen's");
 }
 
 fn touch(phase: egui::TouchPhase, force: Option<f32>) -> egui::Event {

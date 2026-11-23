@@ -3407,6 +3407,17 @@ fn shell_camera(h: &ShellHarness) -> ([f32; 2], f32) {
     h.state().ui.views.first().map(|v| (v.center, v.zoom)).unwrap()
 }
 
+/// The floating areas: what a right-click's menu is (with the Move tool the layer menu or, over
+/// the pasteboard, the canvas menu).
+fn shell_floating_areas(h: &ShellHarness) -> usize {
+    h.ctx.memory(|m| m.areas().visible_layer_ids().into_iter().filter(|l| l.order != egui::Order::Background).count())
+}
+
+/// The right-click menus the canvas opens (`layer_pick_ui`): what a press-and-hold must not.
+fn shell_menu_open(h: &ShellHarness) -> bool {
+    h.state().ui.layer_menu.is_some() || h.state().ui.canvas_tool_menu.is_some()
+}
+
 /// A two-finger flick as Android delivers it (`egui-winit::State::on_touch`): every contact
 /// carries its force, a finger's too — winit passes its pressure as it does a pen's — the fingers
 /// land a frame apart, and the first is the emulated pointer. A force is no sign of a pen there,
@@ -3442,4 +3453,41 @@ fn android_fingers_that_carry_their_pressure_still_flick_to_undo_and_redo() {
     two_fingers_travel(&mut h, force, first, second, -80.0);
     assert_eq!(shell_layer_count(&h), 2, "the cause: read as a pen, the fingers' flick undid nothing");
     assert_eq!(shell_camera(&h), before, "and panned nothing");
+}
+
+/// Fingers that rest before they set off pan, as on iPadOS — and egui's own press-and-hold (a
+/// right-click's menu under the contact at 0.8 s) opens nothing under the first finger while they
+/// rest, nor under the one that rests on after the other lifts: two fingers are a gesture until
+/// the last is up (`PenContacts`), whichever platform's contacts they are.
+#[test]
+fn two_resting_fingers_open_no_press_and_hold_menu_on_android_or_ipados() {
+    for (android, force) in [(true, Some(0.5)), (false, None)] {
+        let mut h = touch_shell_app(android);
+        let centre = h.state().last_canvas_rect.center();
+        let (first, second) = (centre - vec2(30.0, 0.0), centre + vec2(30.0, 0.0));
+        let (before, areas) = (shell_camera(&h), shell_floating_areas(&h));
+
+        // A second's rest is past egui's hold.
+        two_fingers_land(&mut h, force, first, second, 60);
+        assert_eq!(shell_camera(&h), before, "at rest they move nothing");
+        assert_eq!(shell_floating_areas(&h), areas, "two resting fingers open no floating area");
+        assert!(!shell_menu_open(&h), "and no press-and-hold menu under the first");
+
+        // The second lifts; the first rests on, its press past the hold again, then lifts.
+        shell_frame(&mut h, vec![shell_touch(2, egui::TouchPhase::End, second, force)]);
+        for _ in 0..30 {
+            shell_frame(&mut h, vec![]);
+        }
+        assert!(!shell_menu_open(&h), "the finger left is no press-and-hold either");
+        assert_eq!(shell_floating_areas(&h), areas);
+        shell_frame(&mut h, vec![shell_touch(1, egui::TouchPhase::End, first, force), shell_press(first, false), egui::Event::PointerGone]);
+        assert_eq!(shell_floating_areas(&h), areas, "nor is its release");
+
+        // A flick that only sets off after a rest is a pan.
+        two_fingers_land(&mut h, force, first, second, 60);
+        assert!(!shell_menu_open(&h));
+        two_fingers_travel(&mut h, force, first, second, -80.0);
+        assert_eq!(shell_layer_count(&h), 2, "a flick after a pause is a pan");
+        assert_ne!(shell_camera(&h).0, before.0, "it pans");
+    }
 }
