@@ -3332,3 +3332,114 @@ fn with_the_hand_selected_a_swipe_holds_the_hands_drag_too_and_nothing_glides() 
     h.run_steps(60);
     assert_eq!(camera(&h), before, "no Flick Panning glide runs on after the swipe");
 }
+
+/// The whole app as the Android and iPadOS shells hand it a frame: the Touch Interface, and
+/// before every frame the shell's `drop_twins` and then the app's own `raw_input_hook` — where
+/// the touch contacts are classified, which kittest never calls. `fingers_report_force` on is the
+/// Android shell's setting (`Stylus::fingers_report_force`).
+type ShellHarness = egui_kittest::Harness<'static, PhotocraftApp>;
+
+fn touch_shell_app(fingers_report_force: bool) -> ShellHarness {
+    let mut s = photocraft_engine::Session::new();
+    s.execute("file.new", json!({"width": 64, "height": 64, "background": "transparent"})).unwrap();
+    s.execute("layer.new.layer", json!({"name": "extra"})).unwrap();
+    let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1280.0, 800.0)).with_step_dt(1.0 / 60.0).with_max_steps(512).build_eframe(move |cc| {
+        PhotocraftApp::setup_context(&cc.egui_ctx, crate::theme::ThemeKind::Pro);
+        let mut app = PhotocraftApp::new(s, crate::Services::default());
+        app.session.edit_prefs(|p| p.interface.touch_ui = true);
+        app.ui.tool = Tool::Move;
+        app.stylus.fingers_report_force = fingers_report_force;
+        app
+    });
+    h.run_steps(4);
+    h
+}
+
+/// One frame through a mobile shell: `drop_twins`, then the app's hook, then the frame.
+fn shell_frame(h: &mut ShellHarness, events: Vec<egui::Event>) {
+    let ctx = h.ctx.clone();
+    let mut raw = std::mem::take(h.input_mut());
+    raw.events = events;
+    crate::touch_twins::drop_twins(&ctx, &mut raw);
+    eframe::App::raw_input_hook(h.state_mut(), &ctx, &mut raw);
+    *h.input_mut() = raw;
+    h.step();
+}
+
+/// A touch contact as a platform delivers it: every Android contact carries its pressure as the
+/// force, as a pen's would (`Some`); a finger's on iPadOS has none.
+fn shell_touch(id: u64, phase: egui::TouchPhase, pos: egui::Pos2, force: Option<f32>) -> egui::Event {
+    egui::Event::Touch { device_id: egui::TouchDeviceId(0), id: egui::TouchId(id), phase, pos, force }
+}
+
+/// The pointer the first finger to land emulates (`egui-winit::State::on_touch`), until it lifts.
+fn shell_press(pos: egui::Pos2, pressed: bool) -> egui::Event {
+    egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE }
+}
+
+/// Both fingers land a frame apart, the first with the emulated pointer, then rest `rest` frames.
+fn two_fingers_land(h: &mut ShellHarness, force: Option<f32>, first: egui::Pos2, second: egui::Pos2, rest: usize) {
+    shell_frame(h, vec![shell_touch(1, egui::TouchPhase::Start, first, force), egui::Event::PointerMoved(first), shell_press(first, true)]);
+    shell_frame(h, vec![shell_touch(2, egui::TouchPhase::Start, second, force)]);
+    for _ in 0..rest {
+        shell_frame(h, vec![]);
+    }
+}
+
+/// Both fingers travel by (x, 0) in one frame, the first carrying the pointer; then they lift.
+fn two_fingers_travel(h: &mut ShellHarness, force: Option<f32>, first: egui::Pos2, second: egui::Pos2, x: f32) {
+    let (first, second) = (first + egui::vec2(x, 0.0), second + egui::vec2(x, 0.0));
+    shell_frame(
+        h,
+        vec![shell_touch(1, egui::TouchPhase::Move, first, force), egui::Event::PointerMoved(first), shell_touch(2, egui::TouchPhase::Move, second, force)],
+    );
+    shell_frame(h, vec![shell_touch(1, egui::TouchPhase::End, first, force), shell_press(first, false), egui::Event::PointerGone]);
+    shell_frame(h, vec![shell_touch(2, egui::TouchPhase::End, second, force)]);
+}
+
+/// The document's layers: what a swipe undoes and redoes.
+fn shell_layer_count(h: &ShellHarness) -> usize {
+    h.state().session.active().unwrap().doc.layers.len()
+}
+
+/// The document's view: what a swipe puts back, and a pan moves.
+fn shell_camera(h: &ShellHarness) -> ([f32; 2], f32) {
+    h.state().ui.views.first().map(|v| (v.center, v.zoom)).unwrap()
+}
+
+/// A two-finger flick as Android delivers it (`egui-winit::State::on_touch`): every contact
+/// carries its force, a finger's too — winit passes its pressure as it does a pen's — the fingers
+/// land a frame apart, and the first is the emulated pointer. A force is no sign of a pen there,
+/// so the stroke undoes and redoes; read as pen contacts, as everywhere else a force means, the
+/// fingers neither swipe nor pan.
+#[test]
+fn android_fingers_that_carry_their_pressure_still_flick_to_undo_and_redo() {
+    let force = Some(0.5);
+
+    let mut h = touch_shell_app(true);
+    let centre = h.state().last_canvas_rect.center();
+    let (first, second) = (centre - vec2(30.0, 0.0), centre + vec2(30.0, 0.0));
+    let before = shell_camera(&h);
+    assert_eq!(shell_layer_count(&h), 2, "the document starts with a layer to undo");
+
+    // A flick left undoes, a flick right redoes.
+    two_fingers_land(&mut h, force, first, second, 12);
+    two_fingers_travel(&mut h, force, first, second, -80.0);
+    assert_eq!(shell_layer_count(&h), 1, "a two-finger flick left undid the new layer");
+    assert_eq!(shell_camera(&h), before, "and put the view back");
+    two_fingers_land(&mut h, force, first, second, 12);
+    two_fingers_travel(&mut h, force, first, second, 80.0);
+    assert_eq!(shell_layer_count(&h), 2, "a two-finger flick right redid it");
+    assert_eq!(shell_camera(&h), before);
+
+    // The cause: a finger's force read as a pen's (the flag off, as it is wherever a finger's
+    // contact has none) turns the canvas's two-finger gestures off.
+    let mut h = touch_shell_app(false);
+    let centre = h.state().last_canvas_rect.center();
+    let (first, second) = (centre - vec2(30.0, 0.0), centre + vec2(30.0, 0.0));
+    let before = shell_camera(&h);
+    two_fingers_land(&mut h, force, first, second, 12);
+    two_fingers_travel(&mut h, force, first, second, -80.0);
+    assert_eq!(shell_layer_count(&h), 2, "the cause: read as a pen, the fingers' flick undid nothing");
+    assert_eq!(shell_camera(&h), before, "and panned nothing");
+}

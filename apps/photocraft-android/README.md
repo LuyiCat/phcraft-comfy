@@ -7,11 +7,14 @@ The APK carries **no Java code** (`hasCode="false"`): the manifest names the sys
 the JVM thread and calls `android_main` (`src/lib.rs`), which hands eframe its `AndroidApp` and
 runs the same `run_native` path as every other shell. The package id is `com.photocomfy.app`.
 
-Touch input is egui input: winit's Android backend delivers taps as `Touch` events
-(`input/stylus.rs` feeds the pressure for styli that report it), `touch_twins` de-duplicates
-double-delivered taps in `raw_input_hook`. Two fingers pan and pinch the canvas and stand the
-tool down, as on iPadOS, and a quick two-finger flick sideways undoes (left) or redoes (right)
-— one gesture shared by Android and iPadOS (`crates/ui-egui/src/canvas/two_finger_swipe.rs`).
+Touch input is egui input: winit's Android backend delivers taps as `Touch` events, each with
+the contact's pressure — a finger's as much as a stylus's, and no tool type — which
+`input/stylus.rs` feeds to the brush. A force names no pen on Android then
+(`Stylus::fingers_report_force`, which the shell turns on): every contact is a finger, and two
+fingers pan and pinch the canvas and stand the tool down, as on iPadOS, while a quick two-finger
+flick sideways undoes (left) or redoes (right) — one gesture shared by Android and iPadOS
+(`crates/ui-egui/src/canvas/two_finger_swipe.rs`). `touch_twins` de-duplicates double-delivered
+taps in `raw_input_hook`.
 The touch quick-actions column (undo, redo, copy, cut, paste) is chrome like the canvas, not a
 window: every floating editor, menu and dialog covers it. The Touch Interface preference
 (`crates/engine/src/prefs.rs` `default_touch_ui`) is on by default on Android: magnified

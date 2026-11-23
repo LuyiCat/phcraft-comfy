@@ -290,8 +290,9 @@ impl eframe::App for PhotocraftApp {
         // After the control channel's own events (`ui.type`) join the OS's, before any widget.
         widgets::cap_text_events(&mut raw_input.events);
         self.control_click.normalize(&mut raw_input.events, cfg!(target_os = "macos"));
-        // A pen held still is no touch screen's press-and-hold right click (stylus.rs).
-        let pen_down = self.stylus.pen_contacts.observe(&raw_input.events);
+        // A pen held still is no touch screen's press-and-hold right click (stylus.rs). A finger's
+        // force is one too where fingers report a force (Android).
+        let pen_down = self.stylus.pen_contacts.observe(&raw_input.events, self.stylus.fingers_report_force);
         stylus::pen_hold_is_no_right_click(ctx, pen_down);
         // Keep pen navigation policy next to the contact classifier so every mobile shell gets
         // the same protection. The canvas consumes this before it handles wheel, pinch or the

@@ -213,6 +213,9 @@ mod shell {
             }
             // Long commands and file opens run as background jobs with progress, as on the desktop.
             app.background_jobs = true;
+            // winit passes every Android contact's pressure as its force, a finger's too (one
+            // without is a hover): a force names no pen here (`Stylus::fingers_report_force`).
+            app.stylus.fingers_report_force = true;
             if let Some(rs) = cc.wgpu_render_state.clone() {
                 // The GPU canvas: Vulkan on real devices, GLES where the adapter says so, and a
                 // device loss is watched, not fatal (see gpu.rs).

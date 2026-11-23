@@ -143,6 +143,11 @@ pub struct Stylus {
     peak: f32,
     /// The pen's touch contacts in the raw input, so a held pen is no press-and-hold right click.
     pub(crate) pen_contacts: PenContacts,
+    /// Fingers' touch contacts carry a force too. Android's winit passes every contact's pressure
+    /// as the force (one without is a hover there), so there a force names no pen and a stylus is
+    /// not told from a finger; the Android shell turns this on. Everywhere else a force is a pen's
+    /// and a finger's contact has none.
+    pub fingers_report_force: bool,
     /// The egui frame [`Self::update_for_frame`] last ran in.
     updated_frame: Option<u64>,
     /// Tilt X, tilt Y, rotation of each point of the current drag (parallel to its points).
@@ -174,6 +179,7 @@ impl Default for Stylus {
             current: None,
             peak: 0.0,
             pen_contacts: PenContacts::default(),
+            fingers_report_force: false,
             updated_frame: None,
             stroke: Vec::new(),
             times: Vec::new(),
@@ -461,8 +467,9 @@ const CONTACTS: usize = 16;
 
 impl PenContacts {
     /// Follow a frame's touch events. True when a pen contact was down at any point of the frame.
-    pub(crate) fn observe(&mut self, events: &[egui::Event]) -> bool {
-        let pressed = |f: &Option<f32>| f.is_some_and(|f| f > 0.0);
+    /// A force is no sign of a pen when `fingers_report_force` (see [`Stylus::fingers_report_force`]).
+    pub(crate) fn observe(&mut self, events: &[egui::Event], fingers_report_force: bool) -> bool {
+        let pressed = |f: &Option<f32>| !fingers_report_force && f.is_some_and(|f| f > 0.0);
         let mut pen = self.down.iter().any(|(_, p)| *p);
         for e in events {
             let egui::Event::Touch { id, phase, force, .. } = e else { continue };

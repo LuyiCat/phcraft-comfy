@@ -28,7 +28,7 @@ fn held_contact_right_clicks(hover_first: bool, force: Option<f32>) -> bool {
         let mut raw =
             egui::RawInput { time: Some(time), screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(200.0, 200.0))), ..Default::default() };
         raw.events.append(&mut events);
-        let pen = contacts.observe(&raw.events);
+        let pen = contacts.observe(&raw.events, false);
         pen_hold_is_no_right_click(&ctx, pen);
         let mut out = ctx.run_ui(raw, |ui| {
             let r = ui.allocate_rect(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(200.0, 200.0)), egui::Sense::click_and_drag());
@@ -51,16 +51,35 @@ fn pen_contacts_follow_hover_force_and_lift() {
     use egui::TouchPhase::{Cancel, End, Move, Start};
     let t = |id, phase, force| egui::Event::Touch { device_id: egui::TouchDeviceId(1), id: egui::TouchId(id), phase, pos: egui::pos2(1.0, 1.0), force };
     let mut c = PenContacts::default();
-    assert!(!c.observe(&[t(1, Move, None)]), "hovering is no contact");
-    assert!(c.observe(&[t(1, Start, None)]));
-    assert!(c.observe(&[]), "still down");
-    assert!(c.observe(&[t(1, End, None)]), "the lift frame still counts");
-    assert!(!c.observe(&[]));
+    assert!(!c.observe(&[t(1, Move, None)], false), "hovering is no contact");
+    assert!(c.observe(&[t(1, Start, None)], false));
+    assert!(c.observe(&[], false), "still down");
+    assert!(c.observe(&[t(1, End, None)], false), "the lift frame still counts");
+    assert!(!c.observe(&[], false));
     // A finger, until it reports a force.
-    assert!(!c.observe(&[t(9, Start, None), t(9, Move, None)]));
-    assert!(c.observe(&[t(9, Move, Some(0.5))]));
-    assert!(c.observe(&[t(9, Cancel, None)]));
-    assert!(!c.observe(&[]));
+    assert!(!c.observe(&[t(9, Start, None), t(9, Move, None)], false));
+    assert!(c.observe(&[t(9, Move, Some(0.5))], false));
+    assert!(c.observe(&[t(9, Cancel, None)], false));
+    assert!(!c.observe(&[], false));
+}
+
+/// Android's winit passes a finger's pressure as its force like a pen's, and drops the tool type:
+/// there a force names no pen (`Stylus::fingers_report_force`), and only a hover does.
+#[test]
+fn a_force_names_no_pen_where_fingers_report_one() {
+    use egui::TouchPhase::{End, Move, Start};
+    let t = |id, phase, force| egui::Event::Touch { device_id: egui::TouchDeviceId(1), id: egui::TouchId(id), phase, pos: egui::pos2(1.0, 1.0), force };
+    let mut c = PenContacts::default();
+    assert!(!c.observe(&[t(1, Start, Some(0.5)), t(1, Move, Some(0.5))], true), "a finger with its pressure");
+    assert!(!c.observe(&[], true), "still down, still no pen");
+    assert!(!c.observe(&[t(1, End, None)], true));
+    // A pen that hovered first is still one.
+    assert!(!c.observe(&[t(2, Move, None)], true), "hovering is no contact");
+    assert!(c.observe(&[t(2, Start, Some(0.5))], true), "the hovering pen came down");
+    assert!(c.observe(&[t(2, End, None)], true), "the lift frame still counts");
+    // Everywhere else a force is a pen's: that is what read every Android finger as a pen.
+    assert!(!c.observe(&[], false));
+    assert!(c.observe(&[t(3, Start, Some(0.5))], false), "the cause: a finger's force read as a pen's");
 }
 
 fn touch(phase: egui::TouchPhase, force: Option<f32>) -> egui::Event {
