@@ -72,6 +72,11 @@ impl Gesture {
 
     /// Follows the claimed stroke one frame further; true on the frame it is judged a swipe.
     fn judge(&mut self, claim: Claim, m: &MultiTouchInfo, now: f64) -> bool {
+        if self.verdict != Verdict::Pending {
+            // Judged already. Fingers go on moving after a flick, out of step, and a pinch read
+            // into that must not turn the swipe back into a pan, its navigation with it.
+            return false;
+        }
         let travel = m.center_pos - claim.origin;
         self.spread *= m.zoom_delta;
         if m.num_touches != 2 || !(SPREAD.0..=SPREAD.1).contains(&self.spread) {

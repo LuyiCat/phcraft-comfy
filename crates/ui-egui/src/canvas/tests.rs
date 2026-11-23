@@ -3275,6 +3275,48 @@ fn a_two_finger_flick_undoes_and_redoes_and_a_slow_stroke_only_pans() {
     lift(&mut h);
 }
 
+/// Fingers go on moving after the flick, out of step: a frame sees one ahead of the other, which
+/// egui reads as a pinch. The stroke is judged by then and stays what it was. A pinch read into
+/// the tail of a flick must not turn it back into a pan, the view following the fingers again
+/// after the swipe put it back.
+#[test]
+fn a_judged_flick_stays_a_swipe_while_the_fingers_go_on_out_of_step() {
+    use egui::{TouchId, TouchPhase};
+    type H = egui_kittest::Harness<'static, (PhotocraftApp, bool)>;
+    let mut h = two_finger_canvas(Tool::Move);
+    let centre = h.state().0.last_canvas_rect.center();
+    let centre = pos2(centre.x, centre.y);
+    let (first, second) = (centre - vec2(20.0, 0.0), centre + vec2(20.0, 0.0));
+    let touch =
+        |id: u64, phase: TouchPhase, pos: egui::Pos2| egui::Event::Touch { device_id: egui::TouchDeviceId(0), id: TouchId(id), phase, pos, force: None };
+    let layers = |h: &H| h.state().0.session.active().unwrap().doc.layers.len();
+    let camera = |h: &H| h.state().0.ui.views.first().map(|v| (v.center, v.zoom)).unwrap();
+    let frame = |h: &mut H, events: Vec<egui::Event>| {
+        h.input_mut().events = events;
+        h.step();
+        h.run_steps(1);
+    };
+    frame(&mut h, vec![egui::Event::PointerMoved(first), touch(1, TouchPhase::Start, first), touch(2, TouchPhase::Start, second)]);
+    frame(&mut h, vec![]);
+    let before = camera(&h);
+
+    // The flick left, judged 60 pt in.
+    frame(&mut h, vec![touch(1, TouchPhase::Move, first - vec2(60.0, 0.0)), touch(2, TouchPhase::Move, second - vec2(60.0, 0.0))]);
+    assert_eq!(layers(&h), 1, "a two-finger flick left undid the new layer");
+    assert_eq!(camera(&h), before, "and put the view back");
+    // The first finger's next move arrives a frame before the second's (20 pt apart becomes 50),
+    // the second catches up, then is ahead itself.
+    frame(&mut h, vec![touch(1, TouchPhase::Move, first - vec2(90.0, 0.0))]);
+    frame(&mut h, vec![touch(2, TouchPhase::Move, second - vec2(90.0, 0.0))]);
+    frame(&mut h, vec![touch(2, TouchPhase::Move, second - vec2(120.0, 0.0))]);
+    frame(&mut h, vec![touch(1, TouchPhase::Move, first - vec2(120.0, 0.0))]);
+    assert_eq!(layers(&h), 1, "a judged stroke is not judged a second time");
+    assert_eq!(camera(&h), before, "a swipe holds the navigation until the fingers lift, pinch or no pinch");
+    frame(&mut h, vec![touch(1, TouchPhase::End, first - vec2(120.0, 0.0)), touch(2, TouchPhase::End, second - vec2(120.0, 0.0))]);
+    frame(&mut h, vec![]);
+    assert_eq!(camera(&h), before, "and the view is where the fingers found it once they lift");
+}
+
 /// With the Hand selected, the first finger is also the pressed pointer, whose drag pans the
 /// view a second time (`canvas.rs`, after the navigation). A swipe holds that drag with the rest
 /// and ends it: the view stays where the swipe put it back to while the fingers are down, and
