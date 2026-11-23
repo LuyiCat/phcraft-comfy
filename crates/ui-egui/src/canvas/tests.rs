@@ -3176,3 +3176,159 @@ fn two_fingers_cancel_a_stroke_and_pan_instead_of_painting() {
     let buf = photocraft_compose::flatten(&st.doc);
     assert!(buf.px.iter().all(|p| p[0] < 1e-3 && p[3] < 1e-3), "two fingers never paint (found {:?} …)", buf.px.iter().find(|p| p[0] > 1e-3).copied());
 }
+
+/// A canvas ready for a two-finger gesture, `tool` selected: a document with one layer to undo.
+fn two_finger_canvas(tool: Tool) -> egui_kittest::Harness<'static, (PhotocraftApp, bool)> {
+    let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({"width": 64, "height": 64, "background": "transparent"})).unwrap();
+    app.sync_views();
+    app.run("layer.new.layer", json!({"name": "extra"})).unwrap();
+    app.ui.tool = tool;
+    let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(480.0, 360.0)).with_step_dt(1.0 / 60.0).build_ui_state(
+        |ui, (app, ready): &mut (PhotocraftApp, bool)| {
+            if *ready {
+                egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| document_area(app, ui));
+            }
+        },
+        (app, false),
+    );
+    PhotocraftApp::setup_context(&h.ctx, crate::theme::ThemeKind::Pro);
+    h.state_mut().1 = true;
+    h.run_steps(3);
+    h
+}
+
+/// Two fingers flicked across the canvas undo (left) and redo (right) — `two_finger_swipe.rs`.
+/// The view follows the fingers until the stroke is judged, then goes back to where they landed
+/// and stays there until they lift. A slower stroke, or one that waits after landing, only pans.
+#[test]
+fn a_two_finger_flick_undoes_and_redoes_and_a_slow_stroke_only_pans() {
+    use egui::{TouchId, TouchPhase};
+    type H = egui_kittest::Harness<'static, (PhotocraftApp, bool)>;
+    let mut h = two_finger_canvas(Tool::Move);
+    let centre = h.state().0.last_canvas_rect.center();
+    let centre = pos2(centre.x, centre.y);
+    let apart = vec2(20.0, 0.0);
+    let touch =
+        |id: u64, phase: TouchPhase, pos: egui::Pos2| egui::Event::Touch { device_id: egui::TouchDeviceId(0), id: TouchId(id), phase, pos, force: None };
+    let layers = |h: &H| h.state().0.session.active().unwrap().doc.layers.len();
+    let camera = |h: &H| h.state().0.ui.views.first().map(|v| (v.center, v.zoom)).unwrap();
+    // Both fingers land either side of the centre; egui begins the gesture on the next frame.
+    let land = |h: &mut H| {
+        h.input_mut().events =
+            vec![egui::Event::PointerMoved(centre + apart), touch(1, TouchPhase::Start, centre - apart), touch(2, TouchPhase::Start, centre + apart)];
+        h.step();
+        h.run_steps(1);
+    };
+    let lift = |h: &mut H| {
+        h.input_mut().events = vec![touch(1, TouchPhase::End, centre), touch(2, TouchPhase::End, centre)];
+        h.step();
+        h.run_steps(1);
+    };
+    // Both fingers travel by `d`, then an idle frame.
+    let travel = |h: &mut H, d: egui::Vec2| {
+        h.input_mut().events =
+            vec![touch(1, TouchPhase::Move, centre - apart + d), touch(2, TouchPhase::Move, centre + apart + d), egui::Event::PointerMoved(centre - apart + d)];
+        h.step();
+        h.run_steps(1);
+    };
+    assert_eq!(layers(&h), 2, "the document starts with a layer to undo");
+
+    // A fast flick left: judged a swipe 60 pt in, the view goes back and the layer is undone.
+    land(&mut h);
+    let before = camera(&h);
+    travel(&mut h, vec2(-30.0, 0.0));
+    assert_ne!(camera(&h).0, before.0, "the fingers pan until the stroke is judged");
+    travel(&mut h, vec2(-60.0, 0.0));
+    assert_eq!(layers(&h), 1, "a two-finger flick left undid the new layer");
+    assert_eq!(camera(&h), before, "and put the view back");
+    // The fingers keep moving: nothing pans until they lift.
+    travel(&mut h, vec2(-90.0, 0.0));
+    assert_eq!(layers(&h), 1);
+    assert_eq!(camera(&h), before, "a swipe holds the navigation until the fingers lift");
+    lift(&mut h);
+
+    // A fast flick right redoes.
+    land(&mut h);
+    travel(&mut h, vec2(30.0, 0.0));
+    travel(&mut h, vec2(60.0, 0.0));
+    assert_eq!(layers(&h), 2, "a two-finger flick right redid it");
+    assert_eq!(camera(&h), before);
+    lift(&mut h);
+
+    // A slower stroke is a pan, not a swipe.
+    land(&mut h);
+    travel(&mut h, vec2(-30.0, 0.0));
+    h.run_steps(20);
+    travel(&mut h, vec2(-60.0, 0.0));
+    assert_eq!(layers(&h), 2, "a slow two-finger stroke never undoes");
+    assert_ne!(camera(&h).0, before.0, "it pans");
+    lift(&mut h);
+
+    // So is a flick that only sets off after the fingers have rested.
+    land(&mut h);
+    h.run_steps(20);
+    travel(&mut h, vec2(-30.0, 0.0));
+    travel(&mut h, vec2(-60.0, 0.0));
+    travel(&mut h, vec2(-90.0, 0.0));
+    assert_eq!(layers(&h), 2, "a flick after a pause is a pan");
+    lift(&mut h);
+}
+
+/// With the Hand selected, the first finger is also the pressed pointer, whose drag pans the
+/// view a second time (`canvas.rs`, after the navigation). A swipe holds that drag with the rest
+/// and ends it: the view stays where the swipe put it back to while the fingers are down, and
+/// Flick Panning doesn't glide it away when they lift, still moving. As iOS delivers it: each
+/// finger a `Touch` event, the first one a synthesized pointer press too (`ios_tap_flow_tests.rs`).
+#[test]
+fn with_the_hand_selected_a_swipe_holds_the_hands_drag_too_and_nothing_glides() {
+    use egui::{TouchId, TouchPhase};
+    type H = egui_kittest::Harness<'static, (PhotocraftApp, bool)>;
+    let mut h = two_finger_canvas(Tool::Hand);
+    let centre = h.state().0.last_canvas_rect.center();
+    let centre = pos2(centre.x, centre.y);
+    let apart = vec2(20.0, 0.0);
+    let touch =
+        |id: u64, phase: TouchPhase, pos: egui::Pos2| egui::Event::Touch { device_id: egui::TouchDeviceId(0), id: TouchId(id), phase, pos, force: None };
+    let press =
+        |pos: egui::Pos2, pressed: bool| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+    let layers = |h: &H| h.state().0.session.active().unwrap().doc.layers.len();
+    let camera = |h: &H| h.state().0.ui.views.first().map(|v| (v.center, v.zoom)).unwrap();
+    // One frame of the gesture as the iOS shell hands it to the app: its `drop_twins` runs first.
+    let frame = |h: &mut H, events: Vec<egui::Event>| {
+        let ctx = h.ctx.clone();
+        h.input_mut().events = events;
+        crate::touch_twins::drop_twins(&ctx, h.input_mut());
+        h.step();
+        h.run_steps(1);
+    };
+    // Both fingers travel by (x, 0); the first one carries the pointer with it.
+    let moved = |h: &mut H, x: f32| {
+        let (first, second) = (centre - apart + vec2(x, 0.0), centre + apart + vec2(x, 0.0));
+        frame(h, vec![touch(1, TouchPhase::Move, first), touch(2, TouchPhase::Move, second), egui::Event::PointerMoved(first)]);
+    };
+    let before = camera(&h);
+    // The first finger lands (a press with the Hand selected pans nothing yet), then the second.
+    frame(&mut h, vec![touch(1, TouchPhase::Start, centre - apart), press(centre - apart, true)]);
+    frame(&mut h, vec![touch(2, TouchPhase::Start, centre + apart), press(centre + apart, true)]);
+    assert_eq!(camera(&h), before, "two fingers at rest move nothing");
+
+    // The fingers flick left: judged a swipe 60 pt in, the layer is undone and the view is back.
+    moved(&mut h, -30.0);
+    assert_eq!(layers(&h), 2, "the stroke is not judged before 60 pt");
+    moved(&mut h, -60.0);
+    assert_eq!(layers(&h), 1, "a two-finger flick left undid the new layer");
+    assert_eq!(camera(&h), before, "and put the view back, the first finger's drag notwithstanding");
+    // The fingers keep moving under the pressed pointer: the view stays until they lift.
+    moved(&mut h, -90.0);
+    moved(&mut h, -120.0);
+    assert_eq!(camera(&h), before, "a swipe holds the Hand's drag until the fingers lift");
+    // They lift while still moving: that is no Hand drag let go, so nothing glides on.
+    let last = centre - apart + vec2(-120.0, 0.0);
+    frame(
+        &mut h,
+        vec![touch(1, TouchPhase::End, last), touch(2, TouchPhase::End, centre + apart + vec2(-120.0, 0.0)), press(last, false), egui::Event::PointerGone],
+    );
+    h.run_steps(60);
+    assert_eq!(camera(&h), before, "no Flick Panning glide runs on after the swipe");
+}

@@ -216,6 +216,7 @@ impl PhotocraftApp {
             allow_close: false,
             stylus: Default::default(),
             fingers: Default::default(),
+            two_finger_swipe: Default::default(),
             pen_only_painting: false,
             pen_zoom_disabled: false,
             control_click: Default::default(),

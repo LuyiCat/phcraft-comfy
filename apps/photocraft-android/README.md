@@ -10,8 +10,12 @@ runs the same `run_native` path as every other shell. The package id is `com.pho
 Touch input is egui input: winit's Android backend delivers taps as `Touch` events
 (`input/stylus.rs` feeds the pressure for styli that report it), `touch_twins` de-duplicates
 double-delivered taps in `raw_input_hook`. Two fingers pan and pinch the canvas and stand the
-tool down, as on iPadOS. The Touch Interface preference (`crates/engine/src/prefs.rs`
-`default_touch_ui`) is on by default on Android: magnified targets, always-visible scroll bars.
+tool down, as on iPadOS, and a quick two-finger flick sideways undoes (left) or redoes (right)
+— one gesture shared by Android and iPadOS (`crates/ui-egui/src/canvas/two_finger_swipe.rs`).
+The touch quick-actions column (undo, redo, copy, cut, paste) is chrome like the canvas, not a
+window: every floating editor, menu and dialog covers it. The Touch Interface preference
+(`crates/engine/src/prefs.rs` `default_touch_ui`) is on by default on Android: magnified
+targets, always-visible scroll bars.
 Android, unlike iPadOS, reports no safe-area insets to egui (winit has no support yet), so the
 activity runs fullscreen and the UI owns the whole screen. Preferences persist in the app's
 private `files` directory. The system clipboard is bridged through the activity's

@@ -737,6 +737,10 @@ pub struct PhotocraftApp {
     /// read it as a pinch, a wheel or the Zoom tool's drag (the mobile navigation policy the
     /// iPad and Android shells share). Set each frame from the stylus contact classifier.
     pub pen_zoom_disabled: bool,
+    /// The two-finger gesture on the canvas, followed over its frames: a flick sideways is Undo
+    /// (left) / Redo (right), and every other stroke stays navigation
+    /// (`canvas/two_finger_swipe.rs`).
+    pub(crate) two_finger_swipe: canvas::two_finger_swipe::TwoFingerSwipe,
     control_click: control_click::ControlClick,
     /// Run long commands and file opens as background jobs with progress and Cancel (#210; see
     /// `jobs_ui`). The desktop app turns it on; off (the default), everything runs inline as

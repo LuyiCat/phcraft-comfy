@@ -10,7 +10,10 @@
 //! import a paste does (`app/commands.rs`), history and status messages are exactly the Edit
 //! menu's — one behaviour, two affordances. The interactions are taps only (iPadOS has no
 //! right-click), and the card is drawn behind its buttons so the column reads as chrome over
-//! the artwork, like the layer-tray strip.
+//! the artwork, like the layer-tray strip. Chrome, not a window: nothing pins it on top, so
+//! every floating editor window, menu, popup and dialog that opens over the artwork covers it.
+//! Two fingers flicked left or right across the canvas also undo and redo
+//! (`canvas/two_finger_swipe.rs`).
 
 use super::{PhotocraftApp, Tokens, icons, json, pos2, vec2};
 use egui::{Order, Rect, Stroke, StrokeKind};
@@ -33,12 +36,14 @@ const GAP: f32 = 2.0;
 /// Distance from the canvas's top-right corner.
 const MARGIN: f32 = 12.0;
 
-/// The column, over the canvas's top-right corner. An `Area` in the Foreground order, so it
-/// floats above the canvas and takes taps only on its buttons; anchored to `last_canvas_rect`,
-/// which is the space the dock/rail/toolbars leave the artwork — exactly "left of the end
-/// dock". Called from the frame layout before the canvas draws (both the docked and the plain
-/// layout, never on the Home screen), so the first frame after a layout change positions off
-/// the previous rect — a one-frame settle, like the layer-tray strip.
+/// The column, over the canvas's top-right corner, on the background layer order: it floats
+/// above the canvas and takes taps only on its buttons, and nothing pins it on top. Every
+/// floating editor window, menu, popup and dialog covers it, and a tap on the column cannot
+/// lift it above them (an area rises only within its own order). Anchored to
+/// `last_canvas_rect`, which is the space the dock/rail/toolbars leave the artwork — exactly
+/// "left of the end dock". Called from the frame layout before the canvas draws (both the
+/// docked and the plain layout, never on the Home screen), so the first frame after a layout
+/// change positions off the previous rect — a one-frame settle, like the layer-tray strip.
 pub fn column(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     if !crate::touch::on(app) {
         return;
@@ -58,7 +63,9 @@ pub fn column(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     let h = 2.0 * PAD + ACTIONS.len() as f32 * SIZE + (ACTIONS.len() - 1) as f32 * GAP;
     let min = pos2(canvas.right() - w - MARGIN, canvas.top() + MARGIN);
     let mut actions: Vec<&str> = Vec::new();
-    egui::Area::new(egui::Id::unique("quick-actions")).order(Order::Foreground).fixed_pos(min).show(&ctx, |ui| {
+    // With the canvas and the panels, under every window: the background order is never
+    // brought to the front, so the column stays chrome however it is tapped.
+    egui::Area::new(egui::Id::unique("quick-actions")).order(Order::Background).fixed_pos(min).show(&ctx, |ui| {
         // The card behind its buttons: painted before them, on the same layer, so the
         // buttons (drawn later) sit on top of it.
         let card = Rect::from_min_size(ui.cursor().min, vec2(w, h));

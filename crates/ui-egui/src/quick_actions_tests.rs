@@ -49,6 +49,10 @@ fn the_column_sits_at_the_canvas_top_right_and_only_with_the_touch_interface() {
     for label in ["Undo", "Redo", "Copy", "Cut", "Paste"] {
         assert!(column_button(&h, label).is_some(), "{label} is in the column");
     }
+    // Chrome, not a window: the column is on the background layer order, where no tap lifts it
+    // above the floating editor windows, menus and dialogs — those cover it.
+    let layer = egui::LayerId::new(egui::Order::Background, egui::Id::unique("quick-actions"));
+    assert_eq!(h.ctx.layer_id_at(card.center()), Some(layer), "the column sits on the background layer order");
     // Without the Touch Interface there is no column (the desktop keeps its shortcuts).
     let mut s = photocraft_engine::Session::new();
     s.execute("file.new", json!({"width": 64, "height": 48})).unwrap();
@@ -58,6 +62,48 @@ fn the_column_sits_at_the_canvas_top_right_and_only_with_the_touch_interface() {
     });
     h.run_steps(4);
     assert!(crate::panels::quick_actions::rect(&h.ctx).is_none(), "no column in the pointer-first layout");
+}
+
+/// A pointer click at `at`, as the touch harness's taps are shaped.
+fn tap(h: &mut Harness<'_, PhotocraftApp>, at: egui::Pos2) {
+    for pressed in [true, false] {
+        h.input_mut().events = vec![egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE }];
+        h.step();
+    }
+    h.run_steps(3);
+}
+
+/// Chrome, not a window: a floating editor window over the column covers its buttons and stays
+/// above them however the column is tapped (an area is brought to the front only within its own
+/// layer order); the taps that land on the covered part reach the window.
+#[test]
+fn a_floating_window_over_the_column_covers_it_however_the_column_is_tapped() {
+    let mut h = touch_harness();
+    h.state_mut().session.execute("layer.new.layer", json!({"name": "extra"})).unwrap();
+    // Window › Brush Settings floats by the canvas's top-right corner (brush_panel::window).
+    h.state_mut().ui.panels.brush_settings = true;
+    h.run_steps(4);
+    let column_layer = egui::LayerId::new(egui::Order::Background, egui::Id::unique("quick-actions"));
+    let covers =
+        |h: &Harness<'_, PhotocraftApp>, at| h.ctx.layer_id_at(at) == Some(egui::LayerId::new(egui::Order::Middle, egui::Id::unique("brush-settings")));
+    let window = h.ctx.memory(|m| m.area_rect(egui::Id::unique("brush-settings"))).expect("Brush Settings floats");
+    let undo = column_button(&h, "Undo").expect("Undo").rect();
+    assert!(covers(&h, undo.center()), "the window lies over the column's buttons: {window:?} vs {undo:?}");
+    // The sliver of Undo the window leaves showing answers a tap, which brings the column to the
+    // front of its own order — under the window still.
+    let sliver = [egui::pos2(undo.center().x, (undo.top() + window.top()) / 2.0), egui::pos2((window.right() + undo.right()) / 2.0, undo.center().y)]
+        .into_iter()
+        .find(|p| undo.contains(*p) && !window.contains(*p))
+        .expect("a sliver of Undo shows beside the window");
+    assert_eq!(h.ctx.layer_id_at(sliver), Some(column_layer), "the sliver is the column's");
+    tap(&mut h, sliver);
+    assert_eq!(layer_names(&h), ["Background"], "the visible sliver of Undo took the tap");
+    let redo = column_button(&h, "Redo").expect("Redo").rect();
+    assert!(covers(&h, redo.center()), "the window still covers the column after a tap on the column");
+    assert!(h.state().session.is_enabled("edit.redo"), "so a tap on that Redo would redo");
+    tap(&mut h, redo.center());
+    assert_eq!(layer_names(&h), ["Background"], "the covered Redo took no tap");
+    assert!(covers(&h, redo.center()), "and the window is still there over it");
 }
 
 #[test]

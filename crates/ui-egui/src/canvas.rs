@@ -52,6 +52,7 @@ pub mod tool_cursor;
 pub mod tool_feedback;
 mod tool_input;
 mod transform_controls;
+pub(crate) mod two_finger_swipe;
 mod view_xform;
 pub(crate) mod viewport_pages;
 pub mod wheel_nav;
@@ -122,6 +123,7 @@ pub(crate) use transform_controls::{LAYER_EDGES, layer_edges_rect};
 use transform_controls::{begin_transform_controls_at, draw_transform_controls, transform_controls_cursor, transform_controls_rect, transform_controls_turn};
 #[cfg(test)]
 use transform_controls::{transform_controls_hit, transform_controls_layers};
+use two_finger_swipe::Reading;
 pub use view_xform::{ViewXform, doc_point_at, fill_view, fit_view};
 use view_xform::{animated_view, wheel_anchor, zoom_about};
 
@@ -593,9 +595,17 @@ struct CanvasNavigationInput<'a> {
     xf: ViewXform,
     ppp: f32,
     idx: usize,
+    primary: bool,
 }
 
-fn update_canvas_navigation(app: &mut PhotocraftApp, view: &mut View, input: CanvasNavigationInput<'_>) {
+/// Where canvas `idx` keeps its Flick Panning state (`flick_pan.rs`).
+fn flick_pan_id(idx: usize, primary: bool, ctx: &egui::Context) -> egui::Id {
+    egui::Id::unique(("pc-flick-pan", idx, primary, ctx.viewport_id()))
+}
+
+/// Also returns what the two fingers are doing this frame ([`Reading`]), for the navigation
+/// that runs after it (the Hand's drag).
+fn update_canvas_navigation(app: &mut PhotocraftApp, view: &mut View, input: CanvasNavigationInput<'_>) -> Reading {
     // Navigation (wheel_nav.rs): scroll pans (⇧ or ⌘/Ctrl sideways); pinch and ⌥-scroll zoom around the pointer.
     // The wheel also scrolls over the scrollbars drawn on top of the canvas (last frame's hover).
     let bars_id = egui::Id::unique(("pc-canvas-bars-hover", input.idx));
@@ -603,12 +613,40 @@ fn update_canvas_navigation(app: &mut PhotocraftApp, view: &mut View, input: Can
     let nav_hovered = input.response.hovered() || input.free_hover || over_bars;
     // Interface › Enable Animations off: the wheel moves the canvas without a glide (#5721).
     // General › Animated Zoom: the wheel zoom eases over the frames of a notch, or is one instant step.
-    // Enhanced Controls › Enable Gestures off: two fingers on a touch screen neither zoom nor
-    // turn the view (#204); the mouse and trackpad are unaffected.
+    // Enhanced Controls › Enable Gestures off: two fingers on a touch screen neither zoom, turn
+    // the view nor swipe (#204); the mouse and trackpad are unaffected.
     // A pen contact is a drawing/editing input. It must not be interpreted as a pinch or any
     // other zoom gesture on mobile; finger navigation remains available after the pen lifts.
     let touch_gestures = app.session.prefs().enhanced_controls.touch_gestures && !app.pen_zoom_disabled;
     let pinch_zooms = app.session.prefs().enhanced_controls.zoom_with_trackpad_pinch && !app.pen_zoom_disabled;
+    // Two fingers flicked sideways are Undo / Redo (two_finger_swipe.rs), judged on the canvas
+    // they landed on wherever they have travelled since. Read before the navigation it suspends:
+    // a swipe puts the camera back where the fingers found it, and until they lift they pan,
+    // zoom and turn nothing.
+    let under_dialog = !app.ui.dialogs.is_empty();
+    let gesture = if touch_gestures { input.ctx.input(|i| i.multi_touch().map(|m| (m, i.time))) } else { None };
+    let swipe = app.two_finger_swipe.read(input.idx, (view.zoom, view.center, view.rotation), gesture, |at| {
+        !under_dialog && input.response.rect.contains(at) && input.ctx.layer_id_at(at).is_none_or(|l| l.order == egui::Order::Background)
+    });
+    let fingers_nav = touch_gestures && !swipe.held();
+    if let Reading::Swiped { left, camera } = swipe {
+        (view.zoom, view.center, view.rotation) = camera;
+        view.zoom_animating = false;
+        view.zoom_anchor = None;
+        input.ctx.request_repaint();
+        // With the Hand selected the first finger is also the pointer, so its drag was this
+        // canvas's pan. The swipe ends it here rather than where the fingers part: let go as
+        // they flick, it would glide the view off the place it was just put back to.
+        let flick = flick_pan_id(input.idx, input.primary, input.ctx);
+        input.ctx.data_mut(|m| m.get_temp_mut_or_default::<crate::flick_pan::Flick>(flick).stop());
+        let cmd = if left { "edit.undo" } else { "edit.redo" };
+        if app.session.is_enabled(cmd)
+            && let Err(e) = app.run(cmd, json!({}))
+        {
+            app.ui.status = e;
+            app.ui.status_error = true;
+        }
+    }
     let wheel = crate::wheel_nav::read_with(
         input.ctx,
         app.session.prefs().general.zoom_with_scroll_wheel,
@@ -617,7 +655,7 @@ fn update_canvas_navigation(app: &mut PhotocraftApp, view: &mut View, input: Can
         input.wheel_owner,
         nav_hovered,
         app.session.prefs().interface.enable_animations,
-        touch_gestures,
+        fingers_nav,
     );
     if nav_hovered {
         let pointer = input.ctx.input(|i| i.pointer.hover_pos());
@@ -655,7 +693,7 @@ fn update_canvas_navigation(app: &mut PhotocraftApp, view: &mut View, input: Can
         // A second finger pans (Photoshop on iPad: fingers navigate, the tool waits for one
         // finger). egui's MultiTouchInfo reports the fingers' average movement this frame; their
         // pinch is already a Wheel::Zoom above (pinch_factor), and their twist a Rotate View.
-        if touch_gestures
+        if fingers_nav
             && let Some(pan) = input.ctx.input(|i| i.multi_touch().map(|m| m.translation_delta))
             && pan != Vec2::ZERO
         {
@@ -666,7 +704,7 @@ fn update_canvas_navigation(app: &mut PhotocraftApp, view: &mut View, input: Can
             view.center[1] -= d.y;
         }
         let rotate_trackpad = app.session.prefs().enhanced_controls.rotate_view_with_trackpad;
-        if let Some(delta) = crate::rotate_view::trackpad_delta(input.ctx, rotate_trackpad, touch_gestures) {
+        if let Some(delta) = crate::rotate_view::trackpad_delta(input.ctx, rotate_trackpad, fingers_nav) {
             view.zoom_animating = false;
             view.zoom_anchor = None;
             let next = view.rotation + crate::rotate_view::screen_delta(delta, input.xf.flip);
@@ -675,6 +713,7 @@ fn update_canvas_navigation(app: &mut PhotocraftApp, view: &mut View, input: Can
             }
         }
     }
+    swipe
 }
 
 struct DialogCanvasInput<'a> {
@@ -2001,7 +2040,8 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
         crate::spring_tools::note_canvas_press(app);
     }
     let bars_id = egui::Id::unique(("pc-canvas-bars-hover", idx));
-    update_canvas_navigation(app, &mut view, CanvasNavigationInput { ctx: &ctx, response: &response, free_hover, wheel_owner, xf, ppp, idx });
+    let swipe =
+        update_canvas_navigation(app, &mut view, CanvasNavigationInput { ctx: &ctx, response: &response, free_hover, wheel_owner, xf, ppp, idx, primary });
 
     // Pen pressure/tilt for this frame's tool events (mouse = 1.0), unless Preferences › Tools ›
     // Use Tablet Pressure is off; the pen's eraser end selects the Eraser.
@@ -2099,14 +2139,16 @@ pub fn canvas_view(app: &mut PhotocraftApp, ui: &mut egui::Ui, idx: usize, rect:
     let right_held = ctx.input(|i| i.pointer.secondary_down());
     let right_space_pan = space_pan || (right_held && ctx.data(|d| d.get_temp::<bool>(right_pan_id)).unwrap_or(false));
     let right_click = right_alone && crate::paint_mouse::right_click_pending(&response);
-    let hand_drag = hand_pan && response.dragged() && !(app.ui.tool == Tool::Hand && !right_space_pan && right_click);
+    // A two-finger swipe holds this drag with the rest of the navigation until the fingers lift
+    // (`update_canvas_navigation`, which also ends it).
+    let hand_drag = hand_pan && response.dragged() && !swipe.held() && !(app.ui.tool == Tool::Hand && !right_space_pan && right_click);
     ctx.data_mut(|d| d.insert_temp(right_pan_id, right_held && right_space_pan && hand_drag));
     // A pan the right button took part in used it: its release is no right-click.
     if hand_drag && right_held {
         crate::paint_mouse::right_press_used(&response);
     }
     // Preferences › Tools › Enable Flick Panning: a Hand drag let go while moving glides on.
-    let flick_id = egui::Id::unique(("pc-flick-pan", idx, primary, ctx.viewport_id()));
+    let flick_id = flick_pan_id(idx, primary, &ctx);
     let flick_on = app.session.prefs().tools.enable_flick_panning;
     if let Some(d) = crate::flick_pan::frame(&ctx, flick_id, hand_drag && !stroke_dismissal, response.drag_delta(), flick_on) {
         let d = xf.unmap_vec(d) / (view.zoom / ppp);
