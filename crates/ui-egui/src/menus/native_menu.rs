@@ -388,7 +388,7 @@ pub fn mac_layout(bar: &MenuBar, lang: Lang) -> Layout {
     let mut clashes = Vec::new();
     let bound: HashMap<String, String> = bar.items().iter().filter_map(|it| Some((Chord::parse(it.shortcut.as_deref()?)?.portable(), it.id.clone()))).collect();
     let taken = |sc: &str, own: Option<&str>| bound.get(sc).filter(|cmd| Some(cmd.as_str()) != own).cloned();
-    let named = |s: &str| crate::i18n::fmt(tr(lang, s), &[("app", APP_NAME)]);
+    let named = |s: &str| crate::i18n::fmt(tr(lang, s), &[("app", crate::i18n::app_display_name())]);
 
     let about = take(&mut bar, |n| matches!(n, Node::Item(it) if it.role == Some(ItemRole::About)));
     let settings = take(&mut bar, |n| match n {
@@ -443,7 +443,7 @@ pub fn mac_layout(bar: &MenuBar, lang: Lang) -> Layout {
         }
         menu.push(Node::Item(quit));
     }
-    bar.menus.insert(0, Menu { title: APP_NAME.into(), role: MenuRole::App, children: menu });
+    bar.menus.insert(0, Menu { title: crate::i18n::app_display_name().into(), role: MenuRole::App, children: menu });
 
     match taken("Cmd+W", None) {
         Some(command) => clashes.push(Clash { shortcut: "Cmd+W", system: "Close Window", command, resolution: "no system Close Window item" }),

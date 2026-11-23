@@ -258,10 +258,32 @@ pub static LANGUAGES: [LangInfo; 28] = [
 impl LangInfo {
     /// The catalog file's text (empty for English, or if the bundled data can't be inflated).
     pub fn text(&self) -> String {
-        unpack(self.source).unwrap_or_else(|e| {
+        let text = unpack(self.source).unwrap_or_else(|e| {
             log::error!("translation catalog {}: {e}; showing English", self.code);
             String::new()
-        })
+        });
+        if !mobile_brand() || !text.contains("PhotoCraft") {
+            return text;
+        }
+        // The mobile builds are PhotoComfy. Rewrite the brand inside the translation column
+        // only: the key column keeps the English source, so every lookup still hits.
+        let mut out = String::with_capacity(text.len());
+        for line in text.lines() {
+            let mut cols = line.splitn(3, '\t');
+            let (ctx, src, tr) = (cols.next(), cols.next(), cols.next());
+            match (ctx, src, tr) {
+                (Some(ctx), Some(src), Some(tr)) if !line.starts_with('#') && tr.contains("PhotoCraft") => {
+                    out.push_str(ctx);
+                    out.push('\t');
+                    out.push_str(src);
+                    out.push('\t');
+                    out.push_str(&tr.replace("PhotoCraft", "PhotoComfy"));
+                }
+                _ => out.push_str(line),
+            }
+            out.push('\n');
+        }
+        out
     }
 
     fn catalog(&self) -> &Catalog {
@@ -457,6 +479,19 @@ pub fn sync_context(ctx: &egui::Context, language: &str) {
 /// Does `lang` have a catalog entry for this plain string? (English never does: it is the source.)
 pub fn has(lang: Lang, s: &str) -> bool {
     lang.catalog().plain(s).is_some()
+}
+
+/// True when this build must show the PhotoComfy brand: the iOS and Android apps are PhotoComfy
+/// (`agent.md` §1), while the macOS/Windows/Linux desktop app stays PhotoCraft.
+fn mobile_brand() -> bool {
+    cfg!(any(target_os = "android", target_os = "ios"))
+}
+
+/// The user-facing brand of this build. Every screen that names the app — the menu-bar app menu,
+/// the title bar, the home screen, dialog labels — goes through this, and [`LangInfo::text`]
+/// rewrites the bundled catalogs to match, so no mobile screen can surface the desktop name.
+pub fn app_display_name() -> &'static str {
+    if mobile_brand() { "PhotoComfy" } else { "PhotoCraft" }
 }
 
 /// Translate an English UI string into the current language ([`tr`] with [`current`]).

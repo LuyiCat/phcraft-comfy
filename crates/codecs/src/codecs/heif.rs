@@ -16,9 +16,14 @@ use crate::options::Limits;
 
 const F: Format = Format::Heif;
 
-/// The reason given when this build has no HEIF decoder.
+/// The reason given when this build has no HEIF decoder. The app is branded PhotoComfy on
+/// iOS / Android and PhotoCraft on the desktop (`agent.md` §1).
 #[cfg(not(feature = "heif"))]
-pub(crate) const NOT_IN_BUILD: &str = "HEIC/HEIF support isn't included in this build of PhotoCraft";
+pub(crate) const NOT_IN_BUILD: &str = if cfg!(any(target_os = "android", target_os = "ios")) {
+    "HEIC/HEIF support isn't included in this build of PhotoComfy"
+} else {
+    "HEIC/HEIF support isn't included in this build of PhotoCraft"
+};
 
 #[cfg(not(feature = "heif"))]
 pub(crate) fn decode(_bytes: &[u8], _limits: &Limits, _keep_orientation: bool) -> Result<Image, CodecError> {
