@@ -91,11 +91,16 @@ cd "$REPO"
 
 # Embed the craft-fonts faces like a desktop build (docs/development.md › Fonts): iPadOS, unlike
 # macOS, lets no app read the system font files, so without these the UI's Chinese and other
-# script text has no glyphs to fall back to. The documented sibling checkout is picked up
-# automatically; CRAFT_FONTS_DIR set outside wins.
-if [ -z "${CRAFT_FONTS_DIR:-}" ] && [ -d "$REPO/../craft-fonts/fonts" ]; then
-    CRAFT_FONTS_DIR="$REPO/../craft-fonts"
-    export CRAFT_FONTS_DIR
+# script text has no glyphs to fall back to. The ignored project checkout (`craft-fonts/`) is
+# picked up first; the old sibling checkout remains a fallback. CRAFT_FONTS_DIR set outside wins.
+if [ -z "${CRAFT_FONTS_DIR:-}" ]; then
+    for candidate in "$REPO/craft-fonts" "$REPO/../craft-fonts"; do
+        if [ -d "$candidate/fonts" ]; then
+            CRAFT_FONTS_DIR="$(cd "$candidate" && pwd)"
+            export CRAFT_FONTS_DIR
+            break
+        fi
+    done
 fi
 
 # The pinned winit/egui forks carry three fixes that live only as patch files

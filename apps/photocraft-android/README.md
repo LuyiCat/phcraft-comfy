@@ -94,7 +94,7 @@ one NDK (`sdkmanager ndk`), `build-tools` (aapt2/zipalign/apksigner) and a `plat
 package. It cross-compiles through `cargo ndk` (aapt2 needs no Gradle), assembles and signs the
 APK — generating a local keystore on first run (storepass/keypass `android`) — and writes
 `out/android/PhotoComfy.apk` for `arm64-v8a` (every modern phone and tablet; the Apple-silicon emulator
-runs the same ABI). `PROFILE=debug` selects the Cargo profile. The sibling `../craft-fonts`
+runs the same ABI). `PROFILE=debug` selects the Cargo profile. The project-root `craft-fonts/`
 checkout is picked up exactly like an iPadOS build: without it the build works, but CJK and other
 non-Latin interface text shows missing glyphs unless the device's Noto files are readable.
 
@@ -179,5 +179,5 @@ on the emulator image, it falls back to GLES; on real devices Vulkan is the norm
 - **Blank screen / instant quit**: pull `files/launch.log` and `files/crash.log` (Diagnostics);
   with no entries at all, the library never ran — `adb logcat` around the launch shows the load
   error.
-- **Text renders as boxes**: built without the craft-fonts sibling (`../craft-fonts`) on a
-  device whose `/system/fonts` (or the fonts APEX) has no readable CJK collection.
+- **Text renders as boxes**: built without the project-root craft-fonts checkout (`craft-fonts/`)
+  on a device whose `/system/fonts` (or the fonts APEX) has no readable CJK collection.

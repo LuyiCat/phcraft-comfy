@@ -18,9 +18,9 @@ degrades gracefully, as in the browser; preferences persist in the app container
 ## Fonts
 
 iPadOS, unlike macOS, lets no app read the system font files, so the UI's script fallback needs
-the embedded craft-fonts faces: `ios/build.sh` picks up the documented sibling checkout
-(`../craft-fonts`) automatically, exactly like a desktop build with `CRAFT_FONTS_DIR`. Without
-it the build works but non-Latin interface text shows missing glyphs. The system locale (for the
+the embedded craft-fonts faces: `ios/build.sh` picks up the project-root checkout
+(`craft-fonts/`) automatically, exactly like a desktop build with `CRAFT_FONTS_DIR`. Without it
+the build works but non-Latin interface text shows missing glyphs. The system locale (for the
 interface language and the CJK script choice) is read from `NSLocale` at startup.
 
 ## Build

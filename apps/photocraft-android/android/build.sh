@@ -75,20 +75,22 @@ export CARGO_TARGET_DIR="$REPO/target/android"
 # Embed the craft-fonts faces like a desktop build (docs/development.md › Fonts): Android, like
 # iPadOS, gives a NativeActivity app no usable fontconfig, so without these the UI's Chinese and
 # other script text has no glyphs to fall back to (readable system Noto paths are still tried
-# first; see crates/text/src/cjk.rs). The documented sibling checkout is picked up
-# automatically; CRAFT_FONTS_DIR set outside wins.
+# first; see crates/text/src/cjk.rs). The ignored project checkout (`craft-fonts/`) is picked up
+# first; the old sibling checkout remains a fallback. CRAFT_FONTS_DIR set outside wins.
 if [ -z "${CRAFT_FONTS_DIR:-}" ]; then
-    # The documented sibling checkout of the repo root. In a linked worktree the root lives
-    # under target/, so its sibling is not the fonts checkout; the main checkout's sibling
-    # (next to the .git dir) is probed too, or a build from a worktree embeds no fonts and
-    # every CJK glyph on the device is tofu.
+    # In a linked worktree the root lives under target/, so the main checkout next to the .git
+    # dir is probed too. Without one of these, a build from a worktree embeds no fonts and every
+    # CJK glyph on the device is tofu.
     MAIN="$(git -C "$REPO" rev-parse --path-format=absolute --git-common-dir 2>/dev/null | xargs dirname 2>/dev/null)"
     for root in "$REPO" "$MAIN"; do
-        if [ -n "$root" ] && [ -d "$root/../craft-fonts/fonts" ]; then
-            CRAFT_FONTS_DIR="$(cd "$root/.." && pwd)/craft-fonts"
-            export CRAFT_FONTS_DIR
-            break
-        fi
+        [ -n "$root" ] || continue
+        for candidate in "$root/craft-fonts" "$root/../craft-fonts"; do
+            if [ -d "$candidate/fonts" ]; then
+                CRAFT_FONTS_DIR="$(cd "$candidate" && pwd)"
+                export CRAFT_FONTS_DIR
+                break 2
+            fi
+        done
     done
 fi
 
