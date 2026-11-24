@@ -1,0 +1,104 @@
+name: Android Release
+
+# Android-only publication, manually or from a main commit marked [release-android]. The tag is
+# pushed with GITHUB_TOKEN, which does not start the desktop tag workflow; this workflow never
+# builds, signs, or publishes macOS artifacts.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[release-android]')
+    timeout-minutes: 120
+    runs-on: ubuntu-latest
+    env:
+      CRAFT_FONTS_DIR: ${{ github.workspace }}/craft-fonts
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Check out craft-fonts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: storytold/craft-fonts
+          ref: b076417b5880bd4154bd22f00695b1d28c6bea83
+          path: craft-fonts
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          targets: aarch64-linux-android
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: release-android
+          cache-on-failure: true
+
+      - uses: taiki-e/install-action@4a76afe23f9e08d2d9550fb56e556444e8611d21 # v2.90.4
+        with:
+          tool: cargo-ndk
+
+      - name: Resolve and validate the release version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)"
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          TAG="v$VERSION"
+          ! git ls-remote --exit-code --tags origin "refs/tags/$TAG"
+          ! gh release view "$TAG" >/dev/null 2>&1
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the release signing key
+        run: printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+
+      - name: Build and sign the APK
+        env:
+          PHOTOCOMFY_ANDROID_KEYSTORE: ${{ runner.temp }}/release.keystore
+          PHOTOCOMFY_ANDROID_KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          PHOTOCOMFY_ANDROID_KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: apps/photocraft-android/android/build.sh out/android
+
+      - name: Verify and stage the release assets
+        run: |
+          set -euo pipefail
+          BT="$(ls -d "$ANDROID_HOME/build-tools"/* | sort | tail -1)"
+          "$BT/apksigner" verify --print-certs out/android/PhotoComfy.apk
+          badging="$("$BT/aapt2" dump badging out/android/PhotoComfy.apk)"
+          echo "$badging" | grep -F "package: name='com.photocomfy.app'" \
+            | grep -F "versionName='${{ steps.version.outputs.version }}'"
+          echo "$badging" | grep -F "native-code: 'arm64-v8a'"
+          echo "$badging" | grep -F "launchable-activity: name='com.photocomfy.app.PhotoComfyActivity'"
+          unzip -l out/android/PhotoComfy.apk | grep -F 'classes.dex'
+          mkdir assets
+          cp out/android/PhotoComfy.apk "assets/PhotoComfy-${{ steps.version.outputs.version }}-android-arm64.apk"
+          (cd assets && sha256sum -- * > SHA256SUMS.txt)
+
+      - name: Create the annotated tag and publish the Android release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git config user.name "苗怀睿"
+          git config user.email "huairuimiao@gmail.com"
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
+          gh release create "$TAG" --title "PhotoComfy $TAG" --target "$GITHUB_SHA" --generate-notes
+          gh release upload "$TAG" assets/*
+          gh release view "$TAG" --json url,isDraft,assets
