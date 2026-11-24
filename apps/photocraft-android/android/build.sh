@@ -1,7 +1,6 @@
 #!/bin/sh
-# Cross-compiles libphotocraft_android.so and assembles the signed PhotoComfy APK — no Gradle,
-# no Java: the manifest names the system android.app.NativeActivity, which loads the library
-# directly (see android/AndroidManifest.xml).
+# Cross-compiles libphotocraft_android.so and assembles the signed PhotoComfy APK — no Gradle.
+# A single Java Activity supplies full soft-keyboard input; javac/d8 compile it into classes.dex.
 #
 #   apps/photocraft-android/android/build.sh [OUT_DIR]     # from the repo root; default: out/android/
 #
@@ -65,6 +64,18 @@ PLATFORM="$(ls -d "$SDK/platforms"/android-* 2>/dev/null | sort | tail -1)"
 }
 export ANDROID_HOME="$SDK" ANDROID_NDK_HOME="$NDK"
 
+if [ -z "${JAVAC:-}" ]; then
+    if [ -n "${JAVA_HOME:-}" ] && [ -x "$JAVA_HOME/bin/javac" ]; then
+        JAVAC="$JAVA_HOME/bin/javac"
+    else
+        JAVAC="$(command -v javac 2>/dev/null || true)"
+    fi
+fi
+[ -n "$JAVAC" ] && [ -x "$JAVAC" ] || {
+    echo "error: javac not found. Set JAVA_HOME to a JDK (needed for the soft-keyboard Activity)." >&2
+    exit 1
+}
+
 REPO="$(cd "$(dirname "$0")/../../.." && pwd)"
 cd "$REPO"
 
@@ -93,6 +104,11 @@ if [ -z "${CRAFT_FONTS_DIR:-}" ]; then
         done
     done
 fi
+if [ -z "${CRAFT_FONTS_DIR:-}" ]; then
+    echo "error: Chinese and other non-Latin fonts are required. Check out craft-fonts at $REPO/craft-fonts or set CRAFT_FONTS_DIR." >&2
+    exit 1
+fi
+export CRAFT_FONTS_REQUIRED=1
 
 VERSION="$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)"
 [ -n "$VERSION" ] || VERSION="0.0.0"
@@ -124,8 +140,15 @@ cp "$SO" "$WORK/pkg/lib/$ABI/"
     --version-code "$VERSION_CODE" \
     --version-name "$VERSION" \
     -o "$WORK/base.apk"
+mkdir -p "$WORK/classes" "$WORK/dex"
+"$JAVAC" -source 8 -target 8 -classpath "$PLATFORM/android.jar" -d "$WORK/classes" \
+    "$(dirname "$0")/java/com/photocomfy/app/PhotoComfyActivity.java"
+find "$WORK/classes" -name '*.class' -print > "$WORK/classes.list"
+"$BT/d8" --release --min-api "$API" --lib "$PLATFORM/android.jar" --output "$WORK/dex" @"$WORK/classes.list"
+cp "$WORK/dex/classes.dex" "$WORK/pkg/classes.dex"
+
 # extractNativeLibs="true" in the manifest, so the library may ride compressed in the zip.
-cd "$WORK/pkg" && zip -qr "$WORK/base.apk" lib
+cd "$WORK/pkg" && zip -qr "$WORK/base.apk" lib classes.dex
 cd "$REPO"
 
 "$BT/zipalign" -f 4 "$WORK/base.apk" "$WORK/aligned.apk"

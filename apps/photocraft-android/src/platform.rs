@@ -54,6 +54,13 @@ pub fn keep_screen_on() {
     }
 }
 
+pub fn set_text_input_active(active: bool) -> Result<(), String> {
+    with_activity(|env, activity| {
+        env.call_method(activity, jni::jni_str!("setTextInputActive"), jni::jni_sig!("(Z)V"), &[jni::objects::JValue::Bool(active)])?;
+        Ok(())
+    })
+}
+
 /// The runtime permissions that unlock the gallery and the shared storage: the classic
 /// READ/WRITE pair (the legacy full-tree view for this target-29 APK) plus Android 13's
 /// READ_MEDIA_IMAGES for the MediaStore query where the legacy view is unavailable.

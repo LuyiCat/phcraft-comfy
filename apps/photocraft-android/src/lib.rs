@@ -6,7 +6,7 @@
 //! (`clipboard.rs`), so the Image API's fields paste from other apps as they do on iPadOS.
 //! Everything mirrors `apps/photocraft-ios/src/main.rs`.
 //!
-//! The APK carries no Java code (`hasCode="false"`): its `android.app.NativeActivity` loads
+//! Its NativeActivity subclass carries a minimal soft-keyboard input bridge and loads
 //! `libphotocraft_android.so`, android-activity brings up the JVM thread and calls
 //! `android_main` below, which hands the `AndroidApp` to eframe (`NativeOptions::android_app`)
 //! and runs the same `run_native` path as every other shell.
@@ -34,6 +34,8 @@ pub mod long_press;
 // code otherwise.
 pub mod api_gen;
 
+#[cfg(target_os = "android")]
+mod ime;
 #[cfg(target_os = "android")]
 mod platform;
 
@@ -70,6 +72,7 @@ mod shell {
         let _ = FILES_DIR.set(app.internal_data_path());
         // The handle for the window flag and the settings jump (see `platform`).
         crate::platform::set_app(app.clone());
+        crate::ime::init(&app);
         breadcrumb(&format!("external data path: {:?}", crate::platform::external_files_dir()));
         breadcrumb(&format!("storage granted: {}", crate::browser::storage_granted()));
         // KEEP_SCREEN_ON via set_window_flags wedged input on the API 36 emulator (everything
@@ -199,6 +202,7 @@ mod shell {
             // The copy side of the OS clipboard bridge (src/clipboard.rs): the app's text copies
             // reach the system clipboard, which egui-winit cannot do on Android.
             cc.egui_ctx.add_plugin(photocraft_ui_egui::system_clipboard::CopySync::new(crate::clipboard::bridge()));
+            cc.egui_ctx.add_plugin(crate::ime::ImeBridge::default());
             let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), services(browser.clone()));
             // Testing aid (a launcher sets no CLI args for an Android app): open a document at
             // start, to reproduce the canvas states a reviewer sees.
@@ -209,7 +213,7 @@ mod shell {
             }
             // Testing aid: the portrait panel drawer starts open on Layers, for visual checks.
             if std::env::var_os("PHOTOCRAFT_OPEN_DRAWER").is_some() {
-                cc.egui_ctx.data_mut(|d| d.insert_temp(egui::Id::unique("touch-drawer"), Some(photocraft_ui_egui::dock::Group::Layers)));
+                app.touch_drawer = Some(photocraft_ui_egui::dock::Group::Layers);
             }
             // Long commands and file opens run as background jobs with progress, as on the desktop.
             app.background_jobs = true;
@@ -232,6 +236,7 @@ mod shell {
         }
 
         fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+            crate::ime::drain(raw_input);
             // A finger held still for half a second is the touch right-click: synthesize it, and
             // swallow the finger's own events until it lifts so the release cannot click through
             // the menu that opened — the same gesture as iPadOS (crate::long_press).

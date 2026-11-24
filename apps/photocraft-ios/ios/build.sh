@@ -79,7 +79,7 @@ case "${PLATFORM_NAME-}" in
     "") ;; # standalone run: PLATFORM_NAME comes in as $3 below
     iphoneos | iphonesimulator) ;;
     *)
-        echo "error: this target builds for iPadOS only. Pick an iPad simulator or a real iPad" \
+        echo "error: this target builds for iOS/iPadOS. Pick an iPhone or iPad simulator or device" \
             "as the run destination in Xcode's toolbar (not 'My Mac'); this platform was:" \
             "'${PLATFORM_NAME}'." >&2
         exit 1
@@ -102,6 +102,11 @@ if [ -z "${CRAFT_FONTS_DIR:-}" ]; then
         fi
     done
 fi
+if [ -z "${CRAFT_FONTS_DIR:-}" ]; then
+    echo "error: Chinese and other non-Latin fonts are required. Check out craft-fonts at $REPO/craft-fonts or set CRAFT_FONTS_DIR." >&2
+    exit 1
+fi
+export CRAFT_FONTS_REQUIRED=1
 
 # The pinned winit/egui forks carry three fixes that live only as patch files
 # (../patches/README.md): taps landing below their targets on iOS, the safe-area insets, and the

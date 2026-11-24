@@ -51,6 +51,9 @@ pub use sidecar::sidecar_path;
 #[cfg(test)]
 use sidecar::{existing_sidecar_is_ours, read_bounded};
 
+#[cfg(any(target_os = "ios", target_os = "android"))]
+const PROXY_SIDE: usize = 640;
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
 const PROXY_SIDE: usize = 900;
 /// Smallest run of proxy pixels one rayon task takes in the per-pixel passes: below it the
 /// split costs more than the work.

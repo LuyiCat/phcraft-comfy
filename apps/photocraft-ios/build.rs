@@ -5,6 +5,7 @@
 fn main() {
     println!("cargo:rerun-if-changed=ios/PCSceneDelegate.m");
     println!("cargo:rerun-if-changed=ios/PCDocumentPicker.m");
+    println!("cargo:rerun-if-changed=ios/PCTextInput.m");
     let target = std::env::var("TARGET").unwrap_or_default();
     if target.contains("-ios") {
         let out = std::env::var("OUT_DIR").unwrap_or_default();
@@ -16,6 +17,7 @@ fn main() {
         cc::Build::new()
             .file("ios/PCSceneDelegate.m")
             .file("ios/PCDocumentPicker.m")
+            .file("ios/PCTextInput.m")
             .flag("-fobjc-arc")
             .flag("-Wno-deprecated-declarations") // the open picker's document-types init is the pre-UTType API
             .compile("pcscenedelegate");

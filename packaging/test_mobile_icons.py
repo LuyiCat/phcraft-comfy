@@ -19,7 +19,7 @@ ANDROID = ROOT / "apps/photocraft-android/android"
 
 class MobileIconTests(unittest.TestCase):
     def test_ios_exports_have_expected_size_and_no_alpha(self):
-        catalog = IOS / "PhotoCraft/Assets.xcassets/AppIcon.appiconset"
+        catalog = IOS / "PhotoComfy/Assets.xcassets/AppIcon.appiconset"
         for entry in json.loads((catalog / "Contents.json").read_text())["images"]:
             with self.subTest(icon=entry["filename"]), Image.open(catalog / entry["filename"]) as image:
                 pixels = round(float(entry["size"].split("x")[0]) * float(entry.get("scale", "1x")[:-1]))
@@ -29,7 +29,7 @@ class MobileIconTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("plutil"), "needs Apple's plutil to read the Xcode project")
     def test_xcode_target_really_builds_the_icon_catalog(self):
         result = subprocess.run(
-            ["plutil", "-convert", "json", "-o", "-", str(IOS / "PhotoCraft.xcodeproj/project.pbxproj")],
+            ["plutil", "-convert", "json", "-o", "-", str(IOS / "PhotoComfy.xcodeproj/project.pbxproj")],
             check=True, capture_output=True,
         )
         objects = json.loads(result.stdout)["objects"]
@@ -39,7 +39,7 @@ class MobileIconTests(unittest.TestCase):
             phase = objects[phase_id]
             if phase["isa"] == "PBXResourcesBuildPhase":
                 catalogs.extend(objects[objects[item]["fileRef"]]["path"] for item in phase["files"])
-        self.assertIn("PhotoCraft/Assets.xcassets", catalogs)
+        self.assertIn("PhotoComfy/Assets.xcassets", catalogs)
 
     def test_android_launcher_uses_mask_safe_adaptive_layers(self):
         ns = "{http://schemas.android.com/apk/res/android}"
@@ -63,7 +63,7 @@ class MobileIconTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("xcrun"), "needs Xcode's asset compiler")
     def test_standalone_bundle_gets_actual_compiled_icon_names(self):
         with tempfile.TemporaryDirectory(prefix="photocraft-icons-test-") as directory:
-            bundle = Path(directory) / "PhotoCraft.app"
+            bundle = Path(directory) / "PhotoComfy.app"
             bundle.mkdir()
             plist = bundle / "Info.plist"
             plist.write_bytes(plistlib.dumps({"CFBundleIdentifier": "ai.storyteller.photocraft.ios"}))

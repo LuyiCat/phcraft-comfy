@@ -5,7 +5,7 @@ This is the mobile-only icon concept for the iOS and Android shells. The source 
 - `photocomfy-concept-v1.png`: source raster concept.
 - `photocomfy-mobile.svg`: canonical vector source, 512-unit rounded square.
 - `photocomfy-mobile-1024.png`: rounded preview of the approved vector design.
-- [`AppIcon.appiconset`](../../apps/photocraft-ios/ios/PhotoCraft/Assets.xcassets/AppIcon.appiconset/): opaque square iPad icons, masked by iOS itself.
+- [`AppIcon.appiconset`](../../apps/photocraft-ios/ios/PhotoComfy/Assets.xcassets/AppIcon.appiconset/): opaque square iPad icons, masked by iOS itself.
 - [`android/res`](../../apps/photocraft-android/android/res/): legacy launcher PNGs and Android 8+ adaptive background/foreground layers. The glyph fits the central 66 dp safe circle on the 108 dp adaptive canvas.
 
 Regenerate the platform exports from the SVG with `python3 packaging/mobile-icons.py`

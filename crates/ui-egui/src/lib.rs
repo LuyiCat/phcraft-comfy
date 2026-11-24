@@ -345,6 +345,7 @@ type InfoSampleKey = (i32, i32, u64, u32);
 pub struct PhotocraftApp {
     pub session: Session,
     pub ui: UiState,
+    pub touch_drawer: Option<dock::Group>,
     pub services: Services,
     /// Canvas caches per (document, display): CPU textures hold monitor values; the GPU
     /// canvas state is shared (`canvas::GPU_OUTPUT`).

@@ -20,6 +20,8 @@ use photocraft_ui_egui::{FileDialogAnswer, FileDialogRequest, FileStamp, Photocr
 // Unconditional: the services() below references it on every host (clippy, tests); the
 // extern "C" pc_* symbols only link on iOS, where the ObjC file is compiled in.
 mod clipboard;
+#[cfg(target_os = "ios")]
+mod ime;
 mod long_press;
 mod picker;
 // Feature-gated with the Image API transport: App Store Review builds pass
@@ -311,7 +313,7 @@ impl IosShell {
         }
         // Testing aid: the portrait panel drawer starts open on Layers, for visual checks.
         if std::env::var_os("PHOTOCRAFT_OPEN_DRAWER").is_some() {
-            cc.egui_ctx.data_mut(|d| d.insert_temp(egui::Id::unique("touch-drawer"), Some(photocraft_ui_egui::dock::Group::Layers)));
+            app.touch_drawer = Some(photocraft_ui_egui::dock::Group::Layers);
         }
         // Testing aid: present the system document picker at start (the native sheet is the
         // one thing a screenshot can prove without a finger).
@@ -339,6 +341,8 @@ impl eframe::App for IosShell {
     fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
         #[cfg(target_os = "ios")]
         repair_missing_screen_rect(raw_input);
+        #[cfg(target_os = "ios")]
+        ime::drain(raw_input);
         // A finger held still for half a second is the touch right-click: synthesize it, and
         // swallow the finger's own events until it lifts so the release cannot click through
         // the menu that opened (long_press.rs).

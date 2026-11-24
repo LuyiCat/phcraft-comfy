@@ -29,7 +29,13 @@ pub fn is_raw(bytes: &[u8]) -> bool {
 /// The decode limits shared with the flat codecs.
 fn limits() -> Limits {
     let l = codecs::Limits::default();
-    Limits { max_width: l.max_width, max_height: l.max_height, max_pixels: l.max_pixels, max_alloc: l.max_alloc }
+    let mut out = Limits { max_width: l.max_width, max_height: l.max_height, max_pixels: l.max_pixels, max_alloc: l.max_alloc };
+    if cfg!(any(target_os = "ios", target_os = "android")) {
+        let available = crate::memory::MemorySnapshot::current().available_ram.unwrap_or(2 << 30);
+        let working = available.saturating_sub(crate::memory::RESERVE) / 2;
+        out.max_alloc = out.max_alloc.min(working);
+    }
+    out
 }
 
 /// A raw file's embedded JPEG preview, turned upright. Its own EXIF orientation wins when it
@@ -280,7 +286,8 @@ pub fn import_raw_with(name: &str, bytes: &[u8], opts: &DevelopOptions) -> Resul
             let summary = format!("{DEVELOPED_NOTE} ({} demosaic, as-shot white balance)", opts.demosaic.id());
             developed_document(name, bytes, format, dev, &summary)
         }
-        Err(RawError::Unsupported(reason)) => {
+        Err(error @ RawError::LimitExceeded(_)) => Err(IoError::Raw(error)),
+        Err(error) => {
             let jpeg = photocraft_raw::embedded_preview(bytes);
             // A DNG 1.7 converter keeps only its small thumbnail as JPEG and writes the larger
             // previews as JPEG XL, like the raw data (#8125): open the largest of either kind.
@@ -292,19 +299,16 @@ pub fn import_raw_with(name: &str, bytes: &[u8], opts: &DevelopOptions) -> Resul
                     (jxl_preview_image(bytes, p)?, "JPEG XL", size)
                 }
                 (None, Some(p)) => (upright_preview(bytes, p.jpeg, &opts.limits)?, "JPEG", (p.width, p.height)),
-                (None, None) => return Err(IoError::Raw(RawError::Unsupported(reason))),
+                (None, None) => return Err(IoError::Raw(error)),
             };
             let mut r = image_to_document(name, &img)?;
             let depth = if img.sample_type() == SampleType::U8 { "8-bit" } else { "16-bit" };
             r.warnings.insert(
                 0,
-                format!(
-                    "{format}: {reason} is not supported yet; opened the camera's embedded {w}x{h} {kind} preview instead ({depth}, not the raw sensor data)"
-                ),
+                format!("{format}: the raw sensor data could not be developed ({error}); opened the camera's embedded {w}x{h} {kind} preview instead ({depth}, not the raw sensor data)"),
             );
             Ok(r)
         }
-        Err(e) => Err(IoError::Raw(e)),
     }
 }
 

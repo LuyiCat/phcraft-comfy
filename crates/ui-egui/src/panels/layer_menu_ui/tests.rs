@@ -571,3 +571,34 @@ fn every_entry_is_a_known_command() {
         assert!(crate::menu_catalog::CATALOG.iter().any(|m| m.3 == id) || photocraft_engine::commands::find(id).is_some(), "{id}");
     }
 }
+
+#[test]
+fn multi_select_checkboxes_toggle_any_layers_without_modifier_keys() {
+    use egui_kittest::kittest::Queryable;
+
+    let mut s = photocraft_engine::Session::new();
+    s.execute("file.new", json!({"width": 32, "height": 24})).unwrap();
+    s.execute("layer.new.layer", json!({"name": "One"})).unwrap();
+    let one = s.active().unwrap().active_layer.unwrap();
+    s.execute("layer.new.layer", json!({"name": "Two"})).unwrap();
+    let two = s.active().unwrap().active_layer.unwrap();
+    let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1440.0, 900.0)).with_max_steps(64).build_eframe(move |cc| {
+        crate::PhotocraftApp::setup_context(&cc.egui_ctx, crate::theme::ThemeKind::Pro);
+        crate::PhotocraftApp::new(s, crate::Services::default())
+    });
+    h.run_steps(8);
+    let row = crate::layer_row_ui::recorded(&h.ctx).into_iter().find(|r| r.layer == two.0).expect("the second layer row").row;
+    click(&mut h, row.center(), egui::PointerButton::Secondary);
+    h.get_by_label("Multi-Select").click();
+    h.run_steps(3);
+    h.get_by_label("Select One").click();
+    h.run_steps(2);
+    let selected = h.state().session.active().unwrap().selected_layers();
+    assert!(selected.contains(&one) && selected.contains(&two), "the checkbox adds without replacing the active layer");
+    h.get_by_label("Select Two").click();
+    h.run_steps(2);
+    assert_eq!(h.state().session.active().unwrap().selected_layers(), vec![one]);
+    h.get_by_label("Select One").click();
+    h.run_steps(2);
+    assert!(h.state().session.active().unwrap().selected_layers().is_empty(), "the last checkbox can clear the selection");
+}

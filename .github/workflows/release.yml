@@ -137,6 +137,8 @@ jobs:
           echo "$badging" | grep -F "package: name='com.photocomfy.app'" \
             | grep -F "versionName='${{ steps.version.outputs.version }}'"
           echo "$badging" | grep -F "native-code: 'arm64-v8a'"
+          echo "$badging" | grep -F "launchable-activity: name='com.photocomfy.app.PhotoComfyActivity'"
+          unzip -l out/android/PhotoComfy.apk | grep -F 'classes.dex'
 
       - name: Name the release artifact
         run: cp out/android/PhotoComfy.apk "PhotoComfy-${{ steps.version.outputs.version }}-android-arm64.apk"

@@ -77,6 +77,7 @@ fn camera_raw_open(h: &mut Harness<'static, PhotocraftApp>) {
     h.run_steps(3);
     assert!(h.state().camera_raw.is_some(), "the dialog opened");
     assert!(h.ctx.embed_viewports(), "the harness draws the dialog the embedded way a tablet does");
+    assert!(h.ctx.memory(|m| m.area_rect(egui::Id::unique("camera-raw-dialog"))).is_none(), "the full-screen touch dialog is not a floating Area");
 }
 
 fn walk_ok(tap: fn(&mut Harness<'static, PhotocraftApp>, Pos2)) {

@@ -100,7 +100,14 @@ pub fn toolbar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
         return toolbar_top(app, ui);
     }
     let t = Tokens::get(ui.ctx());
-    let (w1, bx, m) = if t.pro { (40.0, 30.0, 5i8) } else { (50.0, 36.0, 7i8) };
+    let touch = crate::touch::on(app);
+    let (w1, bx, m) = if touch {
+        (56.0, 44.0, 6i8)
+    } else if t.pro {
+        (40.0, 30.0, 5i8)
+    } else {
+        (50.0, 36.0, 7i8)
+    };
     let sections = visible_sections(&app.session.prefs().toolbar.hidden);
     // Two columns when the header chevron asks for them; a column that doesn't fit scrolls.
     let double = app.ui.panels.toolbar_double;
@@ -112,7 +119,7 @@ pub fn toolbar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
         .show(ui, |ui| {
             // Toolbar width is a user preference, not a Pro-only feature.
             // Keep the same hit target in every theme (including RTL layouts).
-            let (cr, resp) = ui.allocate_exact_size(vec2(bx, 14.0), Sense::click());
+            let (cr, resp) = ui.allocate_exact_size(vec2(bx, if touch { 28.0 } else { 14.0 }), Sense::click());
             let (shrink, grow) = if crate::direction::is_rtl() { ("chevrons-right", "chevrons-left") } else { ("chevrons-left", "chevrons-right") };
             icons::paint(ui, cr, if double { shrink } else { grow }, 11.0, if resp.hovered() { t.text } else { t.text_faint });
             resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, tl!("Toolbar")));
@@ -247,9 +254,14 @@ pub fn toolbar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                                     {
                                         ui.ctx().request_repaint_after(std::time::Duration::from_secs_f64(0.35 - seconds));
                                     }
-                                    let long_press = held_for.is_some_and(|seconds| seconds >= 0.35);
-                                    let drag_open = ui
-                                        .input(|i| tool_flyout_drag_open(resp.rect, i.pointer.press_origin(), i.pointer.hover_pos(), i.pointer.primary_down()));
+                                    // Mobile shells synthesize one right-click after a stationary hold. A second
+                                    // in-widget timer, or opening as soon as a finger drifts off the icon, makes
+                                    // an ordinary tap flash the flyout for a frame.
+                                    let long_press = !touch && held_for.is_some_and(|seconds| seconds >= 0.35);
+                                    let drag_open = !touch
+                                        && ui.input(|i| {
+                                            tool_flyout_drag_open(resp.rect, i.pointer.press_origin(), i.pointer.hover_pos(), i.pointer.primary_down())
+                                        });
                                     // Clicking the button of its open flyout again, with either button, closes
                                     // it (#4932); the release that ends the long press that opened it doesn't.
                                     let open_here = ui.data(|d| d.get_temp::<(egui::Id, Rect)>(flyout_id)).is_some_and(|(k, _)| k == key);
@@ -669,12 +681,22 @@ fn toolbar_top(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                             if slot.len() > 1 {
                                 paint_toolbar_flyout_indicator(ui, &t, &resp);
                             }
-                            if resp.clicked() {
+                            let key = egui::Id::unique(("strip-slot", *slot_index));
+                            let flyout_id = egui::Id::unique("portrait-tool-flyout");
+                            let held_id = key.with("held");
+                            let was_held = ui.data(|d| d.get_temp::<bool>(held_id)).unwrap_or(false);
+                            if resp.clicked() && !was_held {
                                 crate::tool_memory::select(app, shown);
                             }
-                            // Long press or right click opens the slot's tools below the button
-                            // (the desktop toolbar's flyout opens beside its column).
-                            let held_for = resp.is_pointer_button_down_on().then(|| ui.input(|i| i.pointer.press_start_time().map(|t0| i.time - t0))).flatten();
+                            if was_held && !resp.is_pointer_button_down_on() {
+                                ui.data_mut(|d| d.remove::<bool>(held_id));
+                            }
+                            // A mobile shell turns a stationary hold into one right-click. Keep
+                            // the resulting flyout alive after that event instead of tying its
+                            // lifetime to the press timer, which made it disappear on release.
+                            let held_for = (!crate::touch::on(app) && resp.is_pointer_button_down_on())
+                                .then(|| ui.input(|i| i.pointer.press_start_time().map(|t0| i.time - t0)))
+                                .flatten();
                             if slot.len() > 1
                                 && let Some(seconds) = held_for
                                 && seconds < 0.35
@@ -683,22 +705,40 @@ fn toolbar_top(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                             }
                             let long_press = held_for.is_some_and(|seconds| seconds >= 0.35);
                             if slot.len() > 1 && (long_press || resp.secondary_clicked()) {
-                                if long_press {
-                                    crate::tool_memory::select(app, shown);
-                                }
-                                egui::Popup::menu(&resp)
-                                    .open_memory(Some(egui::SetOpenCommand::Bool(true)))
-                                    .close_behavior(egui::PopupCloseBehavior::IgnoreClicks)
-                                    .show(|ui| {
-                                        ui.set_min_width(200.0);
-                                        for &item in slot.iter() {
-                                            let label = tl!(item.label()).to_string();
-                                            if ui.add(egui::Button::selectable(item == app.ui.tool, label)).clicked() {
-                                                crate::tool_memory::select(app, item);
-                                                ui.close();
+                                ui.data_mut(|d| {
+                                    d.insert_temp(flyout_id, (key, resp.rect));
+                                    if long_press {
+                                        d.insert_temp(held_id, true);
+                                    }
+                                });
+                            }
+                            if slot.len() > 1
+                                && let Some((open_key, anchor)) = ui.data(|d| d.get_temp::<(egui::Id, Rect)>(flyout_id))
+                                && open_key == key
+                            {
+                                let area = egui::Area::new(key.with("flyout"))
+                                    .order(egui::Order::Foreground)
+                                    .pivot(egui::Align2::LEFT_TOP)
+                                    .fixed_pos(anchor.left_bottom() + vec2(0.0, 4.0))
+                                    .show(ui.ctx(), |ui| {
+                                        egui::Frame::popup(ui.style()).show(ui, |ui| {
+                                            ui.set_min_width(200.0);
+                                            for &item in slot.iter() {
+                                                let label = tl!(item.label()).to_string();
+                                                if ui.add(egui::Button::selectable(item == app.ui.tool, label)).clicked() {
+                                                    crate::tool_memory::select(app, item);
+                                                    ui.data_mut(|d| d.remove::<(egui::Id, Rect)>(flyout_id));
+                                                }
                                             }
-                                        }
+                                        });
                                     });
+                                let pressed_outside = ui.input(|i| {
+                                    i.pointer.any_pressed()
+                                        && i.pointer.press_origin().is_some_and(|p| !area.response.rect.contains(p) && !resp.rect.contains(p))
+                                });
+                                if pressed_outside || ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                                    ui.data_mut(|d| d.remove::<(egui::Id, Rect)>(flyout_id));
+                                }
                             }
                         }
                     }

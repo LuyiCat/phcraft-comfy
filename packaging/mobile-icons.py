@@ -40,7 +40,7 @@ def main():
     square = copy.deepcopy(master)
     square_artwork = square.find(f"{{{SVG_NS}}}g")
     square_artwork.attrib.pop("clip-path", None)
-    ios = ROOT / "apps/photocraft-ios/ios/PhotoCraft/Assets.xcassets/AppIcon.appiconset"
+    ios = ROOT / "apps/photocraft-ios/ios/PhotoComfy/Assets.xcassets/AppIcon.appiconset"
     entries = json.loads((ios / "Contents.json").read_text())["images"]
     for entry in entries:
         size = round(float(entry["size"].split("x")[0]) * float(entry.get("scale", "1x")[:-1]))

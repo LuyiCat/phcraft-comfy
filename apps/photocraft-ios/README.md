@@ -1,6 +1,6 @@
 # photocraft-ios
 
-PhotoComfy for iPadOS: the same `ui-egui` shell and engine as the desktop, run by eframe's
+PhotoComfy for iOS and iPadOS: the same `ui-egui` shell and engine as the desktop, run by eframe's
 native runner on Metal. A plain Rust `[[bin]]` — winit's iOS backend calls `UIApplicationMain`
 itself from `EventLoop::run_app`, so no Objective-C bootstrap and no exported symbols are
 needed; the binary is the app bundle's `CFBundleExecutable`.
@@ -19,15 +19,15 @@ degrades gracefully, as in the browser; preferences persist in the app container
 
 iPadOS, unlike macOS, lets no app read the system font files, so the UI's script fallback needs
 the embedded craft-fonts faces: `ios/build.sh` picks up the project-root checkout
-(`craft-fonts/`) automatically, exactly like a desktop build with `CRAFT_FONTS_DIR`. Without it
-the build works but non-Latin interface text shows missing glyphs. The system locale (for the
+(`craft-fonts/`) automatically, exactly like a desktop build with `CRAFT_FONTS_DIR`. Mobile builds
+require it and stop with an error if it is absent, rather than shipping missing glyphs. The system locale (for the
 interface language and the CJK script choice) is read from `NSLocale` at startup.
 
 ## Build and run
 
 Use **Xcode only** for iOS builds, signing, installation, simulation and device runs. Open
-`ios/PhotoComfy.xcodeproj`, select the PhotoComfy scheme and an iPadOS Device (or a connected
-iPad), then press **Run**. Do not invoke `ios/build.sh`, Cargo iOS targets, `xcodebuild`,
+`ios/PhotoComfy.xcodeproj`, select the PhotoComfy scheme and an iOS/iPadOS Device (or a connected
+iPhone/iPad), then press **Run**. Do not invoke `ios/build.sh`, Cargo iOS targets, `xcodebuild`,
 `xcrun`, `simctl`, standalone Simulator or another IDE directly. If the simulated device window
 is not visible, open Xcode's DeviceHub.
 

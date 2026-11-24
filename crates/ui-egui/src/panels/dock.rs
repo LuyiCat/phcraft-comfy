@@ -42,8 +42,7 @@ pub fn dock_area(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
 fn touch_drawer(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     use crate::dock::Group;
     let t = Tokens::get(ui.ctx());
-    let id = egui::Id::unique("touch-drawer");
-    let open: Option<Group> = ui.ctx().data(|d| d.get_temp(id));
+    let open = app.touch_drawer;
     let pro = t.pro;
     let entries: [(Group, &str, &str); 8] = [
         (Group::Layers, "layers", tl!("Layers")),
@@ -55,21 +54,22 @@ fn touch_drawer(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
         (Group::Character, "type", tl!("Character")),
         (Group::Comfy, "sparkles", tl!("Generate")),
     ];
-    let bar = 44.0;
-    let body = if open.is_some() { (ui.ctx().input(|i| i.content_rect()).height() * 0.4).clamp(180.0, 320.0) } else { 0.0 };
+    let bar = 52.0;
+    let body = if open.is_some() { (ui.ctx().input(|i| i.content_rect()).height() * 0.4).clamp(220.0, 360.0) } else { 0.0 };
     egui::Panel::bottom("touch_panels")
         .resizable(false)
         .exact_size(bar + body)
         .frame(egui::Frame::NONE.fill(t.chrome).inner_margin(egui::Margin::symmetric(6, 4)))
         .show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing = vec2(3.0, 2.0);
-                for (group, icon, name) in entries {
-                    if icons::rail_button(ui, icon, 32.0, open == Some(group), name).clicked() {
-                        let next = (open != Some(group)).then_some(group);
-                        ui.ctx().data_mut(|d| d.insert_temp(id, next));
+            egui::ScrollArea::horizontal().id_salt("touch-drawer-groups").auto_shrink([false, true]).show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing = vec2(3.0, 2.0);
+                    for (group, icon, name) in entries {
+                        if icons::rail_button(ui, icon, 40.0, open == Some(group), name).clicked() {
+                            app.touch_drawer = (open != Some(group)).then_some(group);
+                        }
                     }
-                }
+                });
             });
             let Some(group) = open else { return };
             let tabs = group.tabs(pro);
@@ -88,7 +88,8 @@ fn touch_drawer(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
             egui::ScrollArea::vertical()
                 .id_salt(("touch-drawer-body", group.key()))
                 .auto_shrink([false, false])
-                .max_height(body - bar - 4.0)
+                .max_height(ui.available_height())
+                .min_scrolled_height(ui.available_height())
                 .show(ui, |ui| crate::panels::dock_body(app, ui, group, tab));
         });
 }

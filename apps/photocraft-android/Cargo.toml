@@ -21,7 +21,7 @@ wildcard_imports = "deny"
 dbg_macro = "warn"
 todo = "warn"
 
-# The APK's `android.app.NativeActivity` loads this crate as `libphotocraft_android.so`
+# The APK's PhotoComfyActivity (a NativeActivity) loads this crate as `libphotocraft_android.so`
 # (see android/build.sh); the file browser is host-testable, so the core deps are unconditional.
 [lib]
 crate-type = ["cdylib", "lib"]

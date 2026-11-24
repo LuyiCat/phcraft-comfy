@@ -8,6 +8,14 @@ use serde_json::{Value, json};
 /// One entry: label, command id. `None` = separator.
 pub type Entry = Option<(&'static str, &'static str)>;
 
+fn multi_select_id() -> egui::Id {
+    egui::Id::unique("layers-multi-select")
+}
+
+pub(crate) fn multi_select_enabled(ctx: &egui::Context) -> bool {
+    ctx.data(|d| d.get_temp::<bool>(multi_select_id())).unwrap_or(false)
+}
+
 /// English action key; each menu translates it using its existing display context.
 pub(crate) fn mask_toggle_label(enabled: bool) -> &'static str {
     if enabled { "Disable Layer Mask" } else { "Enable Layer Mask" }
@@ -152,6 +160,12 @@ pub fn show(app: &crate::PhotocraftApp, ui: &mut egui::Ui, l: &Layer, on_set: bo
     crate::widgets::menu_scroll(ui, |ui| {
         ui.set_min_width(220.0);
         let mut rename = false;
+        let multi_select = multi_select_enabled(ui.ctx());
+        if ui.selectable_label(multi_select, tl!("Multi-Select")).clicked() {
+            ui.ctx().data_mut(|d| d.insert_temp(multi_select_id(), !multi_select));
+            ui.close();
+        }
+        ui.separator();
         let has_selection = app.session.active().is_some_and(|s| s.doc.selection.is_some());
         items(app, ui, l, on_set, entries(l, on_set, has_selection), actions);
         ui.separator();

@@ -15,9 +15,9 @@ esac
 ICON_TMP="$(mktemp -d)"
 trap 'rm -r "$ICON_TMP"' EXIT
 xcrun actool --compile "$APP" --platform "$PLATFORM" \
-    --minimum-deployment-target 16.0 --target-device ipad --app-icon AppIcon \
+    --minimum-deployment-target 16.0 --target-device iphone --target-device ipad --app-icon AppIcon \
     --output-partial-info-plist "$ICON_TMP/icons.plist" \
-    "$SCRIPT_DIR/PhotoCraft/Assets.xcassets"
+    "$SCRIPT_DIR/PhotoComfy/Assets.xcassets"
 # Refresh generated entries so rerunning this helper after a rebuild is safe.
 for key in CFBundleIcons 'CFBundleIcons~ipad'; do
     /usr/libexec/PlistBuddy -c "Delete :$key" "$APP/Info.plist" 2>/dev/null || true

@@ -228,7 +228,7 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
 /// The dialog as the frame's first panel, taking the whole screen: the single-window answer to
 /// [`show`]'s own OS window (see `app::frame` for why a panel, not floating layers).
 pub fn fullscreen(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
-    draw(app, ui.ctx(), false);
+    draw_frame(app, ui, false);
 }
 
 impl CameraRawDialog {
@@ -245,11 +245,18 @@ impl CameraRawDialog {
 /// The dialog's contents over the whole of `ctx`'s window. `own_window`: the OS window already
 /// shows the title, so none is painted.
 fn draw(app: &mut PhotocraftApp, ctx: &egui::Context, own_window: bool) {
+    egui::Area::new(egui::Id::unique("camera-raw-dialog")).order(egui::Order::Foreground).fixed_pos(ctx.content_rect().min).show(ctx, |ui| {
+        draw_frame(app, ui, own_window);
+    });
+}
+
+fn draw_frame(app: &mut PhotocraftApp, ui: &mut egui::Ui, own_window: bool) {
+    let ctx = &ui.ctx().clone();
     let t = Tokens::get(ctx);
     let screen = ctx.content_rect();
     let current_display = app.session.active().and_then(|st| app.session.color.canvas_display(&st.doc).ok());
     let mut action: Option<&str> = None;
-    egui::Area::new(egui::Id::unique("camera-raw-dialog")).order(egui::Order::Foreground).fixed_pos(screen.min).show(ctx, |ui| {
+    {
         let Some(d) = app.camera_raw.as_mut() else { return };
         history_keys(d, ctx);
         let pointer = ctx.input(|i| i.pointer.primary_down());
@@ -502,7 +509,7 @@ fn draw(app: &mut PhotocraftApp, ctx: &egui::Context, own_window: bool) {
             remember_edit(d);
             d.params = edited;
         }
-    });
+    }
     crate::camera_raw_scope_ui::persist(app, ctx);
     if ctx.input(|i| i.key_pressed(egui::Key::Y))
         && let Some(d) = app.camera_raw.as_mut()

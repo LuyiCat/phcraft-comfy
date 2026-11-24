@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Compiled by android/build.sh with aapt2 — no Gradle, no Java sources: the system
-     android.app.NativeActivity loads libphotocraft_android.so, which brings up the JVM thread
-     through android-activity and calls android_main (src/lib.rs). debuggable stays on so the
-     team build's logs are reachable with `adb run-as`; turn it off for any wider release. -->
+<!-- Compiled by android/build.sh with aapt2 and d8. PhotoComfyActivity extends NativeActivity
+     to add soft-keyboard composition; its native library still calls android_main (src/lib.rs).
+     debuggable stays on so the team build's logs are reachable with `adb run-as`. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.photocomfy.app">
 
@@ -29,14 +28,14 @@
         android:label="PhotoComfy"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
-        android:hasCode="false"
+        android:hasCode="true"
         android:requestLegacyExternalStorage="true"
         android:extractNativeLibs="true"
         android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
         <!-- configChanges covers rotation, fold and density changes so the activity (and the
              winit window behind it) is resized in place instead of being torn down. -->
         <activity
-            android:name="android.app.NativeActivity"
+            android:name=".PhotoComfyActivity"
             android:exported="true"
             android:configChanges="density|fontScale|keyboard|keyboardHidden|layoutDirection|locale|orientation|screenLayout|screenSize|smallestScreenSize|uiMode">
             <intent-filter>

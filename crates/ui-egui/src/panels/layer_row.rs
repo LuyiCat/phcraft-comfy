@@ -185,6 +185,7 @@ pub(super) fn layer_row(
 ) -> Rect {
     let row = RowSel { selected: row.selected || (l.frame.is_some() && crate::frame_tool::selected(app).is_some_and(|f| f.id == l.id)), ..row };
     let selected = row.selected;
+    let multi_select = crate::layer_menu_ui::multi_select_enabled(ctx);
     let t = Tokens::get(ctx);
     // The Layers Panel Options thumbnail size controls rows and both layer/mask thumbnails.
     let (base, row_h) = crate::layers_panel_ui::thumbnail_geometry(app.ui.layers_panel_options.thumbnail_size, t.pro);
@@ -233,6 +234,7 @@ pub(super) fn layer_row(
         + 28.0
         + if l.is_group() { crate::layer_tree_ui::TRIANGLE_W } else { 0.0 }
         + if l.clipped { 12.0 } else { 0.0 }
+        + if multi_select { 28.0 } else { 0.0 }
         + crate::layer_row_ui::reserved_width(l);
     let ts = if base == 0.0 { 0.0 } else { crate::mask_thumbs_ui::thumb_size(l, base, rect.width() - others) };
     let fixed = others + if ts == 0.0 { 0.0 } else { ts + 6.0 + crate::mask_thumbs_ui::width(l, ts) };
@@ -262,7 +264,9 @@ pub(super) fn layer_row(
     paint_target_brackets(app, &painter, &t, &rc);
     // Right-hand indicators first; the name gets what is left and ends in "…" (#144).
     let fx_open = app.session.active().is_none_or(|d| !d.fx_collapsed.contains(&l.id));
-    let (name_right, indicators, fx_toggled) = crate::layer_row_ui::indicators(ui, &painter, rect, x, l, fx_open, actions);
+    let indicators_rect = if multi_select { Rect::from_min_max(rect.min, pos2((rect.right() - 28.0).max(rect.left()), rect.bottom())) } else { rect };
+    let (name_right, indicators, fx_toggled) = crate::layer_row_ui::indicators(ui, &painter, indicators_rect, x, l, fx_open, actions);
+    let checkbox_clicked = multi_select && multi_select_checkbox(ui, &painter, &t, &rc, actions);
     // Dragging the fx badge drags all the layer's effects, not the layer (Photoshop). Like the eye,
     // it takes the drag from the row; clicks still reach the row.
     if let Some(&(_, badge)) = indicators.iter().find(|(k, _)| *k == crate::layer_row_ui::Indicator::Fx)
@@ -315,7 +319,7 @@ pub(super) fn layer_row(
         actions.push(("select.loadSelection".into(), p));
     } else if let Some(cmd) = mask_toggle {
         actions.push(cmd);
-    } else if resp.clicked() && !frame_clicked && !eye_resp.clicked() && !toggled && !fx_toggled && !masks.clicked {
+    } else if resp.clicked() && !checkbox_clicked && !frame_clicked && !eye_resp.clicked() && !toggled && !fx_toggled && !masks.clicked {
         if l.frame.is_some() {
             app.ui.frame_tool.selected = Some(l.id.0);
             app.ui.frame_tool.target =
@@ -329,7 +333,9 @@ pub(super) fn layer_row(
     // #2812) and a Smart Object thumbnail its contents, and a type thumbnail edits its text;
     // anywhere else on the row opens Layer Style (#350, #537).
     // The first click already made this the active layer.
-    handle_row_double_click(app, ui.ctx(), &rc, name_rect, actions);
+    if !multi_select {
+        handle_row_double_click(app, ui.ctx(), &rc, name_rect, actions);
+    }
     let edit_rect = Rect::from_min_max(pos2(x - 3.0, rect.center().y - 11.0), pos2(name_right.max(x + 40.0), rect.center().y + 11.0));
     if let Some(done) = crate::layer_row_ui::rename_field(ui, l.id.0, edit_rect) {
         actions.push(done);
@@ -414,6 +420,28 @@ fn eye_column(app: &mut PhotocraftApp, ui: &mut egui::Ui, l: &Layer, row: RowSel
         crate::layer_menu_ui::color_choices(app, ui, l, row.multi && selected, actions);
     });
     eye_resp
+}
+
+fn multi_select_checkbox(ui: &egui::Ui, painter: &egui::Painter, t: &Tokens, rc: &RowCtx<'_>, actions: &mut Vec<(String, Value)>) -> bool {
+    let (row, layer, selected, multi) = (rc.rect, rc.l, rc.row.selected, rc.row.multi);
+    let hit = Rect::from_center_size(pos2(row.right() - 15.0, row.center().y), vec2(26.0, row.height()));
+    let response = ui.interact(hit, ui.scope_id().with(("multi-select", layer.id.0)), Sense::click());
+    let box_rect = Rect::from_center_size(hit.center(), vec2(18.0, 18.0));
+    painter.rect_filled(box_rect, t.radius_sm, if selected { t.accent } else { t.field });
+    painter.rect_stroke(box_rect, t.radius_sm, Stroke::new(1.0, if selected { t.accent_text } else { t.field_border }), StrokeKind::Inside);
+    if selected {
+        icons::paint(ui, box_rect, "check", 14.0, t.accent_text);
+    }
+    let label = crate::i18n::fmt(tl!("Select {layer}"), &[("layer", &layer.name)]);
+    response.widget_info(|| egui::WidgetInfo::selected(egui::Role::CheckBox, true, selected, label.clone()));
+    if response.clicked() {
+        if selected && !multi {
+            actions.push(("select.deselectLayers".into(), json!({})));
+        } else {
+            actions.push(("layer.select".into(), json!({"layer": layer.id.0, "mode": "toggle"})));
+        }
+    }
+    response.clicked()
 }
 
 fn paint_target_brackets(app: &PhotocraftApp, painter: &egui::Painter, t: &Tokens, rc: &RowCtx<'_>) {

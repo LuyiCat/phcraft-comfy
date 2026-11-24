@@ -28,7 +28,9 @@ impl Pass {
     /// Whether `adapter` may run the pass: not a software adapter (the CPU develop is faster
     /// there), one that renders `Rgba32Float`, and not on the web (no blocking readback yet).
     fn usable(adapter: &wgpu::Adapter) -> bool {
-        if cfg!(target_arch = "wasm32") {
+        // Android uses the same CPU path as the final commit until its device GPU colour
+        // output is verified against it; the proxy is small, so correctness costs no full-size work.
+        if cfg!(any(target_arch = "wasm32", target_os = "android")) {
             return false;
         }
         if adapter.get_info().device_type == wgpu::DeviceType::Cpu {

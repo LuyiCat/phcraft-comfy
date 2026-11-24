@@ -2,10 +2,11 @@
 
 PhotoComfy for Android: the same `ui-egui` shell and engine as the
 desktop, run by eframe's native runner on wgpu (Vulkan, with GLES where the adapter says so).
-The APK carries **no Java code** (`hasCode="false"`): the manifest names the system
-`android.app.NativeActivity`, which loads `libphotocraft_android.so`; android-activity brings up
-the JVM thread and calls `android_main` (`src/lib.rs`), which hands eframe its `AndroidApp` and
-runs the same `run_native` path as every other shell. The package id is `com.photocomfy.app`.
+The manifest names `PhotoComfyActivity`, a minimal `NativeActivity` subclass whose invisible text
+input supplies full soft-keyboard composition (including Chinese) through `src/ime.rs`. It loads
+`libphotocraft_android.so`; android-activity brings up the JVM thread and calls `android_main`
+(`src/lib.rs`), which hands eframe its `AndroidApp` and runs the same `run_native` path as every
+other shell. The package id is `com.photocomfy.app`.
 
 Touch input is egui input: winit's Android backend delivers taps as `Touch` events, each with
 the contact's pressure — a finger's as much as a stylus's, and no tool type — which
@@ -98,14 +99,15 @@ cargo install cargo-ndk --locked
 apps/photocraft-android/android/build.sh out/android
 ```
 
-`build.sh` needs `ANDROID_HOME` (or the default `~/Library/Android/sdk`) with: cmdline-tools,
-one NDK (`sdkmanager ndk`), `build-tools` (aapt2/zipalign/apksigner) and a `platforms;android-*`
-package. It cross-compiles through `cargo ndk` (aapt2 needs no Gradle), assembles and signs the
+`build.sh` needs a JDK (`JAVA_HOME` or `javac` on PATH) and `ANDROID_HOME` (or the default
+`~/Library/Android/sdk`) with: cmdline-tools, one NDK (`sdkmanager ndk`), `build-tools`
+(aapt2/d8/zipalign/apksigner) and a `platforms;android-*` package. It cross-compiles through
+`cargo ndk`, compiles the Activity with javac/d8 (no Gradle), assembles and signs the
 APK — generating a local keystore on first run (storepass/keypass `android`) — and writes
 `out/android/PhotoComfy.apk` for `arm64-v8a` (every modern phone and tablet; the Apple-silicon emulator
 runs the same ABI). `PROFILE=debug` selects the Cargo profile. The project-root `craft-fonts/`
-checkout is picked up exactly like an iPadOS build: without it the build works, but CJK and other
-non-Latin interface text shows missing glyphs unless the device's Noto files are readable.
+checkout is picked up exactly like an iPadOS build. It is required: the build stops if it is
+absent instead of shipping missing CJK or other non-Latin glyphs.
 
 The build also compiles `android/res` with aapt2: the manifest's launcher icon uses the
 mobile design from `assets/app-icon/photocomfy-mobile.svg`. Android 8+ uses adaptive

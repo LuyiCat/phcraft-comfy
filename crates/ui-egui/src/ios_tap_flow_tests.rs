@@ -129,7 +129,7 @@ fn portrait_tool_strip_above_the_canvas_and_the_drawer_below() {
 fn portrait_geometry_and_zoom_settle_with_the_drawer_open() {
     let mut s = photocraft_engine::Session::new();
     s.execute("file.new", serde_json::json!({"width": 64, "height": 48})).unwrap();
-    let mut h = Harness::builder().with_size(vec2(834.0, 1194.0)).with_pixels_per_point(2.0).with_max_steps(16).build_eframe(move |cc| {
+    let mut h = Harness::builder().with_size(vec2(834.0, 1194.0)).with_pixels_per_point(2.0).with_max_steps(64).build_eframe(move |cc| {
         PhotocraftApp::setup_context(&cc.egui_ctx, Default::default());
         let mut app = PhotocraftApp::new(s, crate::Services::default());
         app.session.edit_prefs(|p| {
@@ -139,14 +139,63 @@ fn portrait_geometry_and_zoom_settle_with_the_drawer_open() {
         app
     });
     h.run_steps(4);
-    h.ctx.data_mut(|d| d.insert_temp(egui::Id::unique("touch-drawer"), Some(crate::dock::Group::Layers)));
+    let layers_button = h.get_by_label("Layers").rect().center();
+    finger_tap(&mut h, layers_button);
     let mut rects = Vec::new();
     let mut zooms = Vec::new();
     for _ in 0..4 {
-        h.run_steps(2);
+        h.step();
+        h.step();
         rects.push(h.state().last_canvas_rect);
         zooms.push(h.ctx.zoom_factor());
     }
+    assert!(!crate::layer_row_ui::recorded(&h.ctx).is_empty(), "the bottom drawer displays the Layers panel's rows");
     assert!(rects.windows(2).all(|w| w[0] == w[1]), "the canvas rect must not move between frames: {rects:?}");
     assert!(zooms.windows(2).all(|w| (w[0] - w[1]).abs() < 1e-4), "the interface zoom must settle: {zooms:?}");
+}
+
+#[test]
+fn portrait_tool_flyout_stays_open_after_a_context_tap() {
+    let mut s = photocraft_engine::Session::new();
+    s.execute("file.new", serde_json::json!({"width": 64, "height": 48})).unwrap();
+    let mut h = Harness::builder().with_size(vec2(834.0, 1194.0)).with_pixels_per_point(2.0).with_max_steps(16).build_eframe(move |cc| {
+        PhotocraftApp::setup_context(&cc.egui_ctx, Default::default());
+        let mut app = PhotocraftApp::new(s, crate::Services::default());
+        app.session.edit_prefs(|p| {
+            p.interface.touch_ui = true;
+            p.interface.language = "en".into();
+        });
+        app
+    });
+    h.run_steps(6);
+    h.get_by_label("Brush Tool").click_secondary();
+    h.run_steps(2);
+    let id = egui::Id::unique("portrait-tool-flyout");
+    assert!(h.ctx.data(|d| d.get_temp::<(egui::Id, egui::Rect)>(id)).is_some(), "the context tap opens the tool choices");
+    h.run_steps(4);
+    assert!(h.ctx.data(|d| d.get_temp::<(egui::Id, egui::Rect)>(id)).is_some(), "the choices do not flash away on release");
+    assert!(h.query_by_label("Pencil Tool").is_some(), "the flyout's alternative tool is visible");
+}
+
+#[test]
+fn iphone_portrait_opens_the_layers_drawer_with_its_rows_on_screen() {
+    let mut s = photocraft_engine::Session::new();
+    s.execute("file.new", serde_json::json!({"width": 64, "height": 48})).unwrap();
+    let mut h = Harness::builder().with_size(vec2(393.0, 852.0)).with_pixels_per_point(3.0).with_max_steps(64).build_eframe(move |cc| {
+        PhotocraftApp::setup_context(&cc.egui_ctx, Default::default());
+        let mut app = PhotocraftApp::new(s, crate::Services::default());
+        app.session.edit_prefs(|p| {
+            p.interface.touch_ui = true;
+            p.interface.language = "en".into();
+        });
+        app
+    });
+    h.run_steps(6);
+    let layers = h.get_by_label("Layers").rect();
+    let screen = h.ctx.input(|i| i.content_rect());
+    assert!(screen.contains_rect(layers), "the Layers entry fits the iPhone screen: {layers:?} vs {screen:?}");
+    finger_tap(&mut h, layers.center());
+    let rows = crate::layer_row_ui::recorded(&h.ctx);
+    assert!(!rows.is_empty(), "the iPhone drawer shows the document's layers");
+    assert!(rows.iter().all(|row| screen.intersects(row.row)), "the rows are on screen: {:?}", rows.iter().map(|row| row.row).collect::<Vec<_>>());
 }

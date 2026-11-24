@@ -44,6 +44,7 @@ impl PhotocraftApp {
         let mut app = Self {
             session,
             ui: UiState::default(),
+            touch_drawer: None,
             services,
             canvases: HashMap::new(),
             comfy_queue: Default::default(),
