@@ -184,17 +184,21 @@ jobs:
           gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > assets/artifact.zip
           unzip -o assets/artifact.zip -d assets
           rm assets/artifact.zip
-          find assets -maxdepth 2 -type f -print
+          # Flatten: artifact zips may nest files inside a directory; bring APKs to the top.
+          while IFS= read -r -d '' f; do
+            cp "$f" "assets/$(basename "$f")"
+          done < <(find assets -mindepth 2 -type f -name '*.apk' -print0)
+          find assets -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} +
+          echo "== final assets =="
+          ls -la assets
 
       - name: Compute checksums
         working-directory: assets
         run: |
           set -euo pipefail
-          shopt -s nullglob
-          files=( * )
+          mapfile -t files < <(find . -mindepth 1 -maxdepth 1 -type f -printf '%P\n')
           test "${#files[@]}" -gt 0
-          sha256sum -- "${files[@]}" > SHA256SUMS.txt
-          cat SHA256SUMS.txt
+          sha256sum -- "${files[@]}" | tee SHA256SUMS.txt
 
       - name: Create the release
         env:
