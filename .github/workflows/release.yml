@@ -151,31 +151,52 @@ jobs:
           if-no-files-found: error
 
   # The desktop release job skips when any platform build fails, which would leave a built APK
-  # without a release. This fallback assembles an Android-only draft (same shape as the shared
-  # draft-release action: draft, generated notes, checksums over every asset) so a pushed tag
+  # without a release. This fallback assembles an Android-only release (same shape as the shared
+  # draft-release action: generated notes, checksums over every asset) so a pushed tag
   # always yields a downloadable PhotoComfy APK. When the desktop release succeeds it stays
   # skipped, and its draft already carries the APK.
   android-release:
     needs: [release, android]
     if: always() && needs.android.result == 'success' && needs.release.result != 'success'
     timeout-minutes: 10
-    name: android-only draft release
+    name: android-only release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: release-android
-          path: assets
+      # The pinned actions/download-artifact silently leaves the target directory empty here
+      # (both v1.1.0 and v1.1.1 failed at the checksum step), so fetch the artifact through
+      # the REST API with the run token instead — deterministic and easy to diagnose.
+      - name: Fetch the Android artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p assets
+          artifact_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts" \
+            --jq '.artifacts[] | select(.name == "release-android") | .id' | head -n 1)"
+          test -n "$artifact_id"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > assets/artifact.zip
+          unzip -o assets/artifact.zip -d assets
+          rm assets/artifact.zip
+          find assets -maxdepth 2 -type f -print
 
       - name: Compute checksums
         working-directory: assets
-        run: sha256sum -- * > SHA256SUMS.txt
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=( * )
+          test "${#files[@]}" -gt 0
+          sha256sum -- "${files[@]}" > SHA256SUMS.txt
+          cat SHA256SUMS.txt
 
-      - name: Create the draft release
+      - name: Create the release
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION_OVERRIDE: ${{ inputs.version }}
@@ -190,7 +211,7 @@ jobs:
           fi
           test -n "$VERSION"
           if ! gh release view "v$VERSION" >/dev/null 2>&1; then
-            gh release create "v$VERSION" --draft --title "PhotoCraft v$VERSION" \
+            gh release create "v$VERSION" --title "PhotoComfy v$VERSION" \
               --target "$GITHUB_SHA" --generate-notes
           fi
           gh release upload "v$VERSION" --clobber assets/*
