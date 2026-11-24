@@ -60,8 +60,8 @@ PhotoComfy 是纯本地 iPad 图像编辑器。
 
 提交前请替换以下字段：
 
-* 技术支持网址：`待提供 HTTPS 地址`
-* 隐私政策网址：`待提供 HTTPS 地址`
+* 技术支持网址：`https://luyicat.github.io/phcraft-comfy/support.html`（GitHub Pages，源文件 `appstore-assets/support.html`，推送到 main 自动更新）
+* 隐私政策网址：`https://luyicat.github.io/phcraft-comfy/privacy-policy.html`（同上，`appstore-assets/privacy-policy.html`）
 * 版权文本：`Copyright © 2026 苗怀睿. All rights reserved.`（必须与 Apple Developer 账户的卖家名称一致：个人账户填法定姓名，公司账户填法人实体名称）
 * 审核联系人姓名、电话、邮箱：`待提供`
 * 发布地区：`待确认`
