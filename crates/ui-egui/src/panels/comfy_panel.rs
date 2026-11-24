@@ -558,8 +558,13 @@ fn workflow(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
         // one (a shell without a workflow store) there is nowhere to import into — and only ComfyUI graphs to import.
         let can_import = app.session.comfy.workflows_dir.is_some() || !app.session.prefs().integrations.comfy_workflows_dir.trim().is_empty();
         if can_import && ui.button("Import…").clicked() {
-            let _ = app.pick_file_bytes_filtered(&["json"], |app, name, _bytes| {
-                let r = app.run("ai.comfyui.workflows.import", json!({"path": name})).map_err(|e| e.to_string())?;
+            let _ = app.pick_file_bytes_filtered(&["json"], |app, name, bytes| {
+                let source = if std::path::Path::new(&name).is_absolute() && std::path::Path::new(&name).is_file() {
+                    json!({"path": name})
+                } else {
+                    json!({"fileName": name, "data": photocraft_engine::paint::tile::b64_encode(&bytes)})
+                };
+                let r = app.run("ai.comfyui.workflows.import", source).map_err(|e| e.to_string())?;
                 refresh_workflows(app);
                 if let Some(n) = r.get("name").and_then(Value::as_str) {
                     app.ui.comfy_panel.workflow = n.to_string();

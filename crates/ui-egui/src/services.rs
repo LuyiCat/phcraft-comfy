@@ -474,6 +474,9 @@ pub struct Services {
     /// Where `ai.comfyui.fill` results persist as PNGs (the config dir's `Generations` folder;
     /// desktop only). Restored onto the result shelf at startup.
     pub comfy_generations_dir: Option<std::path::PathBuf>,
+    /// Where picked WebAssembly plug-ins are copied by their manifest id and reloaded at startup.
+    /// `None` keeps the desktop's per-process Install Plug-in and preference-folder behaviour.
+    pub plugin_import_dir: Option<std::path::PathBuf>,
     /// Files delivered asynchronously (web drag-and-drop): drained every frame and opened as
     /// documents.
     pub inbox: Option<Inbox>,

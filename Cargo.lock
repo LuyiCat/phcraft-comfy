@@ -5703,6 +5703,7 @@ dependencies = [
  "tempfile",
  "toml",
  "unicode-bidi",
+ "wat",
  "web-time",
  "winsafe",
 ]

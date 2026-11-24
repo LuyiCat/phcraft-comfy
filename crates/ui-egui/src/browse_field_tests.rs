@@ -64,6 +64,19 @@ fn install_plugin_path_is_chosen_with_browse() {
     assert_eq!(field(&h, "path"), Some(json!("/tmp/blur.wasm")));
 }
 
+#[test]
+fn install_plugin_contents_are_kept_for_sandboxed_pickers() {
+    let bytes = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/../plugins/tests/fixtures/invert.wasm")).to_vec();
+    let (mut h, _) = harness(vec![Some(FileDialogAnswer::Contents("Picked.wasm".into(), bytes.clone()))]);
+    let ctx = h.ctx.clone();
+    crate::menus::invoke(h.state_mut(), &ctx, "plugin.install", json!({})).unwrap();
+    h.run_steps(4);
+    h.get_by_label("Browse…").click();
+    h.run_steps(4);
+    assert_eq!(field(&h, "path"), Some(json!("Picked.wasm")));
+    assert_eq!(field(&h, "data"), Some(json!(photocraft_engine::paint::tile::b64_encode(&bytes))));
+}
+
 /// #9357: Image Processor's source and destination folders are chosen with Browse…, as
 /// Photoshop's Select Folder… buttons choose them, instead of being typed.
 #[test]

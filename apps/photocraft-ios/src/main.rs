@@ -508,7 +508,20 @@ fn repair_missing_screen_rect(raw_input: &mut egui::RawInput) {
 }
 
 fn services() -> Services {
-    services_in(documents_dir())
+    let mut services = services_in(documents_dir());
+    if let Some(dir) = app_support_dir() {
+        attach_app_storage(&mut services, &dir);
+    }
+    services
+}
+
+/// Global imports live in the app container, not beside the security-scoped source file.
+/// Kept separate from `services_in`: host tests opt into a temporary root explicitly instead of
+/// opening the developer's real preset store when they only need the document services.
+fn attach_app_storage(services: &mut Services, app_support: &Path) {
+    services.preset_store = Some(photocraft_engine::preset_store::open_dir_async(app_support.join("Presets")));
+    services.comfy_workflows_dir = Some(app_support.join("comfy_workflows"));
+    services.plugin_import_dir = Some(app_support.join("Plugins"));
 }
 
 /// [`services`] with the folder a save writes into, so a host test can point it at a temporary
@@ -732,5 +745,46 @@ mod tests {
         photocraft_ui_egui::dialogs::confirm(&mut app, id).unwrap();
         assert_ne!(std::fs::read(&path).unwrap(), first, "Replace writes the new document");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The production storage wiring, driven with a temporary Application Support root: an
+    /// image-imported brush (including its sampled tip), a pattern and a recorded action all
+    /// survive dropping the Session and reopening the on-disk store.
+    #[test]
+    fn global_brush_pattern_and_action_imports_reopen_from_app_storage() {
+        let unique = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+        let root = std::env::temp_dir().join(format!("photocraft-ios-presets-{}-{unique}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let mut services = services_in(None);
+        services.load_prefs = None;
+        services.save_prefs = None;
+        attach_app_storage(&mut services, &root);
+        assert_eq!(services.comfy_workflows_dir.as_deref(), Some(root.join("comfy_workflows").as_path()));
+        assert_eq!(services.plugin_import_dir.as_deref(), Some(root.join("Plugins").as_path()));
+
+        let opened = services.preset_store.take().unwrap().recv_timeout(std::time::Duration::from_secs(30)).unwrap();
+        let mut session = photocraft_engine::Session::new();
+        assert!(session.attach_preset_store(opened).is_empty());
+        session.execute("file.new", serde_json::json!({"width": 8, "height": 8, "background": "white"})).unwrap();
+        session.execute("edit.fill", serde_json::json!({"color": "#000000"})).unwrap();
+        let png = photocraft_io::export(&session.active().unwrap().doc, "Stamp.png", &photocraft_io::ExportOptions::default()).unwrap().bytes;
+        session
+            .execute("brush.presets.importImage", serde_json::json!({"data": photocraft_engine::paint::tile::b64_encode(&png), "fileName": "Stamp.png"}))
+            .unwrap();
+        session.execute("edit.definePattern", serde_json::json!({"name": "Kept Pattern"})).unwrap();
+        session.execute("actions.record", serde_json::json!({"name": "Kept Action"})).unwrap();
+        session.execute("layer.new.layer", serde_json::json!({})).unwrap();
+        session.execute("actions.stop", serde_json::json!({})).unwrap();
+        drop(session);
+
+        let mut restored = photocraft_engine::Session::new();
+        assert!(restored.attach_preset_store(photocraft_engine::preset_store::open_dir(root.join("Presets"))).is_empty());
+        assert!(restored.tools.presets.iter().any(|preset| preset.name == "Stamp"));
+        assert!(restored.patterns.items.iter().any(|pattern| pattern.name == "Kept Pattern"));
+        let actions = restored.execute("actions.list", serde_json::json!({})).unwrap();
+        assert!(actions["actions"].as_array().unwrap().iter().any(|action| action["name"] == "Kept Action"));
+        assert!(root.join("Presets").join("actions.json").is_file());
+        assert!(std::fs::read_dir(root.join("Presets").join("tips")).unwrap().count() > 0, "the sampled brush tip is on disk");
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

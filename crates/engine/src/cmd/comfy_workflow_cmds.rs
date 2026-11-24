@@ -774,17 +774,36 @@ fn list_workflows(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn import_workflow(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "ai.comfyui.workflows.import";
-    let path =
-        p.get("path").and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty()).ok_or_else(|| bad(CMD, "`path` must be the workflow file to import"))?;
-    if path.len() > 4_000 {
-        return Err(bad(CMD, "`path` is too long"));
-    }
     #[cfg(not(target_arch = "wasm32"))]
     {
-        let path = PathBuf::from(path);
+        // Native pickers can answer with contents instead of a security-scoped path (iPadOS).
+        // Keep the source name for the library entry and diagnostics, but never require the
+        // engine to reopen the user's original file after the picker has delivered its bytes.
+        let source = if let Some(data) = p.get("data") {
+            let data = data.as_str().ok_or_else(|| bad(CMD, "`data` must be a base64 string"))?;
+            if data.len() > FILE_MAX_BYTES / 3 * 4 + 4 {
+                return Err(bad(CMD, "`data` is larger than the workflow limit"));
+            }
+            let bytes = crate::paint::tile::b64_decode(data).ok_or_else(|| bad(CMD, "`data` is not valid base64"))?;
+            let name = p.get("fileName").and_then(Value::as_str).filter(|name| !name.trim().is_empty()).unwrap_or("workflow.json");
+            (PathBuf::from(name), bytes)
+        } else {
+            let path = p
+                .get("path")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .ok_or_else(|| bad(CMD, "give `path` or base64 `data` for the workflow file"))?;
+            if path.len() > 4_000 {
+                return Err(bad(CMD, "`path` is too long"));
+            }
+            let path = PathBuf::from(path);
+            let bytes = photocraft_format::read_file(&path).map_err(|e| EngineError::Other(format!("{}: {e}", path.display())))?;
+            (path, bytes)
+        };
+        let (path, bytes) = source;
         let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("workflow").to_string();
         let name = safe_name(&stem).ok_or_else(|| bad(CMD, format!("`{stem}` is not a usable workflow name")))?;
-        let bytes = photocraft_format::read_file(&path).map_err(|e| EngineError::Other(format!("{}: {e}", path.display())))?;
         if bytes.len() > FILE_MAX_BYTES {
             return Err(EngineError::Other(format!("{} is {} KiB, over the {} KiB limit", path.display(), bytes.len() / 1024, FILE_MAX_BYTES / 1024)));
         }
@@ -819,8 +838,8 @@ fn import_workflow(s: &mut Session, p: &Value) -> Result<Value> {
     }
     #[cfg(target_arch = "wasm32")]
     {
-        let _ = path;
-        Err(EngineError::Other("importing workflows needs the desktop app".into()))
+        let _ = p;
+        Err(EngineError::Other("importing workflows needs a native app".into()))
     }
 }
 
@@ -1412,7 +1431,7 @@ pub fn specs() -> Vec<CommandSpec> {
             label: "Import ComfyUI Workflow…",
             menu: &[],
             shortcut: None,
-            params: r#"{"path":text,"url":text} (import a workflow file: a ComfyUI Workflow › Save file is converted to the API format against the server's nodes, a Workflow › Export (API) file is stored as-is; it lands in the workflows folder)"#,
+            params: r#"{"path":text,"fileName":text,"data":json,"url":text} (import a workflow file by path or base64 data: a ComfyUI Workflow › Save file is converted to the API format against the server's nodes, a Workflow › Export (API) file is stored as-is; it lands in the workflows folder)"#,
             enabled: comfy_cmds::transport_enabled,
             run: import_workflow,
             journal: false,
@@ -1910,6 +1929,29 @@ mod tests {
         assert!(s.execute("ai.comfyui.workflows.remove", json!({"name": "../evil"})).is_err());
         assert!(s.execute("ai.comfyui.workflows.import", json!({"path": 7})).is_err());
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// iPadOS's document picker returns a display name and bytes, not a reopenable path. The
+    /// byte payload must land in the same store and list again in a fresh Session.
+    #[test]
+    fn import_accepts_picked_bytes_and_reopens_the_store() {
+        let dir = std::env::temp_dir().join(format!("photocraft-comfy-picked-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut s = Session::new();
+        s.comfy.transport = Some(mock_transport());
+        s.comfy.workflows_dir = Some(dir.clone());
+        let data = crate::paint::tile::b64_encode(include_bytes!("comfy_flux3_klein.json"));
+        let r = s.execute("ai.comfyui.workflows.import", json!({"fileName": "Picked.json", "data": data})).unwrap();
+        assert_eq!(r["name"], json!("Picked"));
+        assert_eq!(r["converted"], json!(false));
+        assert!(dir.join("Picked.json").is_file());
+        drop(s);
+
+        let mut restored = Session::new();
+        restored.comfy.workflows_dir = Some(dir.clone());
+        let list = restored.execute("ai.comfyui.workflows.list", json!({})).unwrap();
+        assert!(list["workflows"].as_array().unwrap().iter().any(|workflow| workflow["name"] == "Picked" && workflow["builtin"] == false));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

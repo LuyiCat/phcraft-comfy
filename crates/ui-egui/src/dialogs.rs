@@ -29,7 +29,8 @@ fn browse_field(app: &mut PhotocraftApp, id: u64, fields: &serde_json::Map<Strin
         let request = crate::file_dialog::FileDialogRequest::Open { multiple: false, initial_dir, extensions: Some(vec!["wasm".into()]) };
         app.ask_file(request, move |app, answer| match answer {
             crate::file_dialog::FileDialogAnswer::Paths(mut paths) if !paths.is_empty() => fill_field(app, id, &key, paths.remove(0)),
-            _ => Err("Install Plug-in reads a .wasm file from disk".into()),
+            crate::file_dialog::FileDialogAnswer::Contents(name, bytes) => crate::plugin_storage::fill_picked(app, id, name, bytes),
+            _ => Err("Choose one .wasm plug-in file".into()),
         })
     } else {
         return;
@@ -968,6 +969,12 @@ fn confirm_generic_command(app: &mut PhotocraftApp, d: Dialog) -> Result<Value, 
         }
     };
     let result = crate::actions::run_step_dialog(app, &d.fields, &cmd, params.clone());
+    #[cfg(not(target_arch = "wasm32"))]
+    let result = if cmd == "plugin.install" {
+        result.and_then(|installed| crate::plugin_storage::persist_installed(app, &params, &installed).map(|()| installed))
+    } else {
+        result
+    };
     // A filter that runs as a background job keeps its preview on screen until the job
     // lands (`canvas::committed_filter_preview`) instead of flashing the unfiltered image.
     let running =
