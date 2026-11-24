@@ -646,7 +646,7 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
             let compact = d.fields.contains_key("__compact");
             // The curve editor's graph is as wide as the dialog lets it be (#5113, #8984).
             let curves = is_curves(&fields);
-            if !compact {
+            if !compact && d.kind != DialogKind::NewDocument {
                 ui.set_min_width(if curves { 300.0 } else { 380.0 });
             }
             // A resizable dialog's contents fill its resizable area (#7420), the others the window.
@@ -655,18 +655,19 @@ pub fn show(app: &mut PhotocraftApp, ctx: &egui::Context) {
             if let Some(w) = wide {
                 ui.set_min_width(w.min(460.0));
             }
-            if d.kind == DialogKind::NewDocument {
-                // Clamped to the room there is: an 11-inch iPad in portrait at the Touch
-                // Interface scale has ~760 pt, and a minimum above that pushed the dialog
-                // (its Create button included) past the right edge of the screen.
-                ui.set_min_width(800.0);
-            }
             // The About window: room for the contributor table, the same width on every tab.
             let about_tabs = d.kind == DialogKind::About && d.fields.get("systemInfo").and_then(Value::as_bool) != Some(true);
             if about_tabs {
                 ui.set_min_width(700.0);
             }
             ui.set_max_width(wide.unwrap_or_else(|| default_max_width(&d, compact, curves, about_tabs, available.x)));
+            if d.kind == DialogKind::NewDocument {
+                // Keep the desktop width where it fits, but never centre an 800 pt dialog in a
+                // phone-sized viewport: that puts both Preset Details and Create off screen.
+                let width = 800.0_f32.min((ctx.content_rect().width() - 32.0).max(280.0));
+                ui.set_min_width(width);
+                ui.set_max_width(width);
+            }
             if web || fixed.is_some() {
                 ui.set_max_width(available.x);
                 ui.set_min_size(available);

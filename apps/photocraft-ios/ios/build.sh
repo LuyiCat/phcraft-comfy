@@ -115,21 +115,46 @@ export CRAFT_FONTS_REQUIRED=1
 # patched crates only when a patch actually changed something (--forward skips applied hunks).
 apply_fork_patch() {
     patch_file="$1"
-    for manifest in $(cargo metadata --format-version 1 2>/dev/null | tr ',' '\n' | sed -n 's/.*"manifest_path":"\([^"]*\)\/Cargo.toml".*/\1/p' | grep -E '/(winit|egui)$'); do
-        name=$(basename "$manifest")
+    # winit is a repository-root package, so its manifest directory is the checkout hash
+    # (…/checkouts/winit-…/a517b38), not a directory literally named "winit". Filtering only
+    # for paths ending in /winit or /egui silently skipped the touch-coordinate patch.
+    for manifest in $(cargo metadata --format-version 1 2>/dev/null | tr ',' '\n' | sed -n 's/.*"manifest_path":"\([^"]*\)\/Cargo.toml".*/\1/p' | grep -E '(/checkouts/winit-[^/]+/[^/]+$)|(/egui$)'); do
         case "$(basename "$patch_file")" in
-            *winit*) [ "$name" = "winit" ] || continue ;;
-            *) [ "$name" = "egui" ] || continue ;;
+            *winit*)
+                case "$manifest" in
+                    */checkouts/winit-*) name=winit ;;
+                    *) continue ;;
+                esac
+                ;;
+            *)
+                [ "$(basename "$manifest")" = "egui" ] || continue
+                name=egui
+                ;;
         esac
-        # The patch roots at the fork's checkout: the egui workspace root sits two levels above
-        # its package manifest, winit's manifest is its root.
-        source_dir=$(dirname "$manifest")
-        [ "$(basename "$source_dir")" = "crates" ] && source_dir=$(dirname "$source_dir")
+        # The patch roots at the fork's checkout. winit's manifest directory already IS that
+        # root; egui's package directory is <checkout>/crates/egui, two levels below it.
+        if [ "$name" = "winit" ]; then
+            source_dir="$manifest"
+        else
+            source_dir=$(dirname "$manifest")
+            [ "$(basename "$source_dir")" = "crates" ] && source_dir=$(dirname "$source_dir")
+        fi
         # --forward skips already-applied hunks; a checkout the patch changed needs a clean.
         patch_out=$(patch -d "$source_dir" -p1 --forward < "$patch_file" 2>&1 || true)
         if echo "$patch_out" | grep -q "^patching file"; then
             echo "fork patch applied: $name <- $(basename "$patch_file") (in $source_dir)"
             cargo clean -p "$name" --profile "$PROFILE" --target "$TARGET" 2>/dev/null || cargo clean -p "$name" 2>/dev/null || true
+        fi
+        # Never mistake a skipped/failed patch for a repaired build. These sentinels are in the
+        # patched sources themselves, so a fresh or changed checkout fails with a useful log.
+        case "$name" in
+            winit) patched_file=src/platform_impl/ios/window.rs; sentinel='drawable covers the whole window' ;;
+            egui) patched_file=crates/egui/src/context.rs; sentinel='The true screen rect from the platform stands' ;;
+        esac
+        if ! grep -q "$sentinel" "$source_dir/$patched_file"; then
+            echo "$patch_out" >&2
+            echo "error: $(basename "$patch_file") was not applied to $source_dir" >&2
+            exit 1
         fi
     done
 }

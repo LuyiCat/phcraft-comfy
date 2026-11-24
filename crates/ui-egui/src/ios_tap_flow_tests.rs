@@ -12,10 +12,8 @@ use egui_kittest::kittest::Queryable;
 
 use crate::PhotocraftApp;
 
-fn harness() -> Harness<'static, PhotocraftApp> {
-    // pixels_per_point 2 as on the iPad: the Touch Interface zoom then leaves ~760 pt of
-    // design width, less than the New Document dialog's 800 pt design minimum.
-    let mut h = Harness::builder().with_size(vec2(834.0, 1194.0)).with_pixels_per_point(2.0).with_max_steps(16).build_eframe(|cc| {
+fn harness_at(size: egui::Vec2, pixels_per_point: f32) -> Harness<'static, PhotocraftApp> {
+    let mut h = Harness::builder().with_size(size).with_pixels_per_point(pixels_per_point).with_max_steps(16).build_eframe(|cc| {
         PhotocraftApp::setup_context(&cc.egui_ctx, Default::default());
         let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), crate::Services::default());
         app.session.edit_prefs(|p| p.interface.touch_ui = true);
@@ -23,6 +21,12 @@ fn harness() -> Harness<'static, PhotocraftApp> {
     });
     h.run_steps(4);
     h
+}
+
+fn harness() -> Harness<'static, PhotocraftApp> {
+    // pixels_per_point 2 as on the iPad: the Touch Interface zoom then leaves ~760 pt of
+    // design width, less than the New Document dialog's 800 pt design minimum.
+    harness_at(vec2(834.0, 1194.0), 2.0)
 }
 
 /// One iOS-shaped tap: the touch and its synthesized pointer press arrive together, the shell's
@@ -85,6 +89,12 @@ fn a_mouse_click_creates_a_document_from_the_menu() {
 #[test]
 fn a_finger_tap_creates_a_document_from_the_menu() {
     let mut h = harness();
+    walk_new_document(&mut h, finger_tap);
+}
+
+#[test]
+fn iphone_finger_tap_creates_a_document_from_the_menu() {
+    let mut h = harness_at(vec2(393.0, 852.0), 3.0);
     walk_new_document(&mut h, finger_tap);
 }
 

@@ -20,52 +20,17 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
-	<!-- The binary is built by Cargo (ios/build.sh) and placed into the bundle by the
-	     target's script phase; Xcode signs the finished bundle. -->
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
-	<!-- The Image API endpoint is user-configured and https; loopback (a relay on the Mac during
-	     simulator testing) is exempted from App Transport Security, non-local http is not. -->
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+	<key>MinimumOSVersion</key>
+	<string>16.0</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
-	<key>MinimumOSVersion</key>
-	<string>16.0</string>
-	<key>UIDeviceFamily</key>
-	<array>
-		<integer>1</integer>
-		<integer>2</integer>
-	</array>
-	<!-- The editing canvas and touch chrome assume the whole screen; partial-screen iPad
-	     multitasking leaves too little room for the panels and canvas controls. -->
-	<key>UIRequiresFullScreen</key>
-	<true/>
-	<key>UIFileSharingEnabled</key>
-	<true/>
-	<!-- With UIFileSharingEnabled this makes the app's Documents appear under 我的 iPad / On My
-	     iPad in the Files app and the document picker; without it only Finder (a real device)
-	     sees the folder and the picker's On My iPad stays empty. -->
-	<key>LSSupportsOpeningDocumentsInPlace</key>
-	<true/>
-	<!-- Launch screen: dark, matching the app's chrome, so the cold-start window (a freshly
-	     booted simulator's first launch takes ~13 s to first frame; warm launches ~1 s) reads
-	     as "loading" rather than a white screen. -->
-	<key>UILaunchScreen</key>
-	<dict>
-		<key>UIColorName</key>
-		<string></string>
-		<key>UIBackgroundColor</key>
-		<string>#1c1c1e</string>
-	</dict>
-	<!-- UIScene lifecycle adoption, required by iPadOS 27 (which traps at scene creation
-	     otherwise; 26 only warns). The delegate class is the empty PCSceneDelegate compiled
-	     into the binary by build.rs — winit still drives the window itself through the classic
-	     path, attaching its plain UIWindow to the foreground scene this manifest creates. A
-	     manifest WITHOUT a delegate class name leaves no foreground scene for that window and
-	     every OS shows a black screen (tried and reverted); the delegate name is the load-bearing
-	     part. -->
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -83,6 +48,22 @@
 			</array>
 		</dict>
 	</dict>
+	<key>UIDeviceFamily</key>
+	<array>
+		<integer>1</integer>
+		<integer>2</integer>
+	</array>
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIBackgroundColor</key>
+		<string>#1c1c1e</string>
+		<key>UIColorName</key>
+		<string></string>
+	</dict>
+	<key>UIRequiresFullScreen</key>
+	<true/>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

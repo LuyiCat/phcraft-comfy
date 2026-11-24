@@ -532,22 +532,24 @@ pub fn body(app: &mut crate::PhotocraftApp, ui: &mut egui::Ui, f: &mut Map<Strin
     ui.style_mut().interaction.selectable_labels = false;
     let cat = get_s(f, "__category", "Recent");
     let mut create = false;
-    // Category tabs.
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 18.0;
-        for name in CATEGORIES.iter().map(|c| c.0).chain(["Saved"]) {
-            let on = cat == name;
-            let label = if name == "Saved" { tl!("Saved") } else { tl!(name) };
-            let r = ui
-                .add(egui::Label::new(RichText::new(label).size(13.0).color(if on { t.text } else { t.text_dim })).selectable(false).sense(Sense::click()))
-                .on_hover_cursor(egui::CursorIcon::PointingHand);
-            if on {
-                ui.painter().line_segment([r.rect.left_bottom() + vec2(0.0, 3.0), r.rect.right_bottom() + vec2(0.0, 3.0)], Stroke::new(2.0, t.text));
+    // Category tabs scroll rather than imposing their full translated width on a phone dialog.
+    egui::ScrollArea::horizontal().id_salt("new-document-categories").auto_shrink([false, true]).show(ui, |ui| {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 18.0;
+            for name in CATEGORIES.iter().map(|c| c.0).chain(["Saved"]) {
+                let on = cat == name;
+                let label = if name == "Saved" { tl!("Saved") } else { tl!(name) };
+                let r = ui
+                    .add(egui::Label::new(RichText::new(label).size(13.0).color(if on { t.text } else { t.text_dim })).selectable(false).sense(Sense::click()))
+                    .on_hover_cursor(egui::CursorIcon::PointingHand);
+                if on {
+                    ui.painter().line_segment([r.rect.left_bottom() + vec2(0.0, 3.0), r.rect.right_bottom() + vec2(0.0, 3.0)], Stroke::new(2.0, t.text));
+                }
+                if r.clicked() {
+                    f.insert("__category".into(), json!(name));
+                }
             }
-            if r.clicked() {
-                f.insert("__category".into(), json!(name));
-            }
-        }
+        });
     });
     ui.add_space(6.0);
     widgets::hairline(ui);
@@ -565,10 +567,13 @@ pub fn body(app: &mut crate::PhotocraftApp, ui: &mut egui::Ui, f: &mut Map<Strin
         })
         .collect();
     let chosen = get_s(f, "__preset", "");
-    ui.horizontal_top(|ui| {
-        // Left: preset grid.
+    // A phone cannot fit the desktop's 520 pt preset grid beside the 260 pt details pane.
+    // Stack the same two sections instead of clipping the details and the dialog's Create row.
+    let narrow = ui.ctx().content_rect().width() < 700.0;
+    let columns = |ui: &mut egui::Ui| {
+        // Left (wide screens) or top (phones): preset grid.
         ui.vertical(|ui| {
-            ui.set_width(520.0);
+            ui.set_width(if narrow { 336.0 } else { 520.0 });
             if cat == "Saved" {
                 create |= saved_presets(app, ui, f);
                 return;
@@ -578,7 +583,7 @@ pub fn body(app: &mut crate::PhotocraftApp, ui: &mut egui::Ui, f: &mut Map<Strin
             let card = vec2(164.0, 112.0);
             // Up to 20 recent documents: scroll past three rows rather than grow the dialog.
             egui::ScrollArea::vertical().id_salt("new-document-presets").max_height(3.0 * (card.y + 8.0)).show(ui, |ui| {
-                for row in presets.chunks(3) {
+                for row in presets.chunks(if narrow { 2 } else { 3 }) {
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing.x = 8.0;
                         for c in row {
@@ -838,7 +843,12 @@ pub fn body(app: &mut crate::PhotocraftApp, ui: &mut egui::Ui, f: &mut Map<Strin
             }
             save_preset(app, ui, f);
         });
-    });
+    };
+    if narrow {
+        ui.vertical(columns);
+    } else {
+        ui.horizontal_top(columns);
+    }
     create
 }
 
