@@ -18,6 +18,8 @@ apps/photocraft-android/android/build/
 apps/photocraft-android/android/*.keystore
 # Xcode build products for the iOS app (the GUI uses DerivedData, the CLI may write here).
 apps/photocraft-ios/ios/build/
+# Local CLI build, archive and acceptance caches stay on the machine that made them.
+apps/photocraft-ios/ios/.ios-build/
 # Android build products are kept under target/android by the build script; ignore the old
 # source-tree location as well so a stale checkout cannot add unsigned APK intermediates.
 apps/photocraft-android/android/build/
@@ -27,3 +29,6 @@ xcuserdata/
 # Standalone build output dir (the iOS and Android app build scripts write here).
 /out/
 .zcode/
+# Editor and dependency-diagnosis snapshots stay local.
+.idea/
+.ios-debug-deps/
