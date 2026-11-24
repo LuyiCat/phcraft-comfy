@@ -1,0 +1,194 @@
+//! The file browser's click flow, replayed off-device (the ui-egui `ios_tap_flow_tests`
+//! pattern): a dialog opens over a harness-drawn app, a directory row enters the folder, a
+//! file row answers `Paths`, Cancel answers nothing. The emulator round showed the browser
+//! rendering but never hit-testing when drawn by the Android shell, so the flow is pinned
+//! here where the harness's pointer is authoritative.
+
+use std::sync::Arc;
+use std::sync::mpsc;
+use std::time::Duration;
+
+use egui_kittest::Harness;
+use egui_kittest::kittest::Queryable;
+use photocraft_android::browser::{Action, Browser};
+use photocraft_ui_egui::{FileDialogAnswer, FileDialogReply};
+
+/// Draws the browser window over an empty app, as the Android shell's `ui` pass does.
+struct Shell {
+    browser: Arc<Browser>,
+}
+
+impl eframe::App for Shell {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        // The device's Touch Interface zoom (the shell's default), so the printed row rects
+        // match what to tap on the emulator.
+        ui.ctx().set_zoom_factor(1.4);
+        if let Action::RequestGrant = self.browser.draw(ui) {
+            panic!("the grant jump is not wired in the harness");
+        }
+    }
+}
+
+/// A `FileDialogReply` whose answer lands in a channel we can await, built the way
+/// `poll_file_dialog` builds one.
+fn reply(ctx: &egui::Context) -> (FileDialogReply, mpsc::Receiver<Option<FileDialogAnswer>>) {
+    let (tx, rx) = mpsc::channel();
+    (FileDialogReply::new(tx, ctx.clone()), rx)
+}
+
+fn harness(browser: &Arc<Browser>) -> Harness<'static, Shell> {
+    let mut harness: Harness<'static, Shell> = Harness::builder().with_size(egui::vec2(914.0, 571.0)).with_pixels_per_point(2.0).build_eframe(|cc| {
+        photocraft_ui_egui::PhotocraftApp::setup_context(&cc.egui_ctx, Default::default());
+        Shell { browser: browser.clone() }
+    });
+    harness.run_steps(2);
+    harness
+}
+
+fn recv(rx: &mpsc::Receiver<Option<FileDialogAnswer>>) -> Option<Option<FileDialogAnswer>> {
+    rx.recv_timeout(Duration::from_secs(2)).ok()
+}
+
+#[test]
+fn tapping_a_file_row_answers_its_path() {
+    let dir = std::env::temp_dir().join(format!("pc-browser-test-{}", std::process::id()));
+    std::fs::create_dir_all(dir.join("Download")).expect("fixture dir");
+    std::fs::write(dir.join("Download").join("picture.png"), b"png").expect("fixture file");
+
+    let browser = Browser::shared();
+    let mut harness = harness(&browser);
+
+    // The shell's file_dialog service routes an Open request into the browser; starting in
+    // the fixture root lists the Download folder as a row. An unfiltered Open lands on the
+    // Gallery tab first (off-device: the gate), so pick the Files tab before browsing.
+    let (reply, rx) = reply(&harness.ctx);
+    browser.begin_open(true, Some(dir.to_string_lossy().into_owned()), None, reply);
+    harness.run_steps(3);
+    assert!(browser.is_active(), "the browser opens");
+    harness.get_by_label("Files").click();
+    harness.run_steps(3);
+    harness.get_by_label("[dir]  Download").click();
+    harness.run_steps(3);
+    let row = harness.get_by_label("       picture.png");
+    println!("file-row logical rect: {:?}", row.rect());
+    row.click();
+    harness.run_steps(5);
+
+    let answer = recv(&rx).expect("an answer arrives");
+    assert_eq!(answer, Some(FileDialogAnswer::Paths(vec![dir.join("Download").join("picture.png").to_string_lossy().into_owned()])));
+    assert!(!browser.is_active(), "the browser closed after answering");
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn cancel_answers_none_and_closes() {
+    let dir = std::env::temp_dir().join(format!("pc-browser-cancel-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("fixture dir");
+
+    let browser = Browser::shared();
+    let mut harness = harness(&browser);
+    let (reply, rx) = reply(&harness.ctx);
+    browser.begin_open(false, Some(dir.to_string_lossy().into_owned()), None, reply);
+    harness.run_steps(3);
+
+    harness.get_by_label("Cancel").click();
+    harness.run_steps(5);
+
+    assert_eq!(recv(&rx), Some(None));
+    assert!(!browser.is_active());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn save_mode_answers_the_prefilled_path() {
+    // A bare suggested name starts in the app's Projects folder (the library every save
+    // accumulates into), so the prefilled name joins there.
+    let browser = Browser::shared();
+    let mut harness = harness(&browser);
+    let (reply, rx) = reply(&harness.ctx);
+    browser.begin_save("artwork.png".into(), reply);
+    harness.run_steps(3);
+    assert!(browser.is_active());
+
+    // The suggested name is prefilled, so Save answers at once; appending the suggested
+    // extension to a bare answer stays the app's job (`pick_save`).
+    harness.get_by_label("Save").click();
+    harness.run_steps(5);
+
+    assert_eq!(recv(&rx), Some(Some(FileDialogAnswer::SaveTo(std::env::temp_dir().join("Projects").join("artwork.png").to_string_lossy().into_owned()))));
+    assert!(!browser.is_active());
+}
+
+/// Pump frames until `done` holds or two seconds pass: the Files tab's thumbnails decode on
+/// a worker thread, which answers between frames (the gallery flow's helper, the same need).
+fn wait_for(harness: &mut Harness<'static, Shell>, done: impl Fn(&Harness<'static, Shell>) -> bool) -> bool {
+    let deadline = std::time::Instant::now() + Duration::from_secs(2);
+    while std::time::Instant::now() < deadline {
+        harness.run_steps(2);
+        std::thread::sleep(Duration::from_millis(10));
+        if done(harness) {
+            return true;
+        }
+    }
+    false
+}
+
+/// A file row shows the picture itself once its thumbnail decodes: the row grows from a text
+/// line to a 48 pt image button, so picking a file to open or place shows what you get, not
+/// just its name.
+#[test]
+fn a_file_row_shows_the_images_thumbnail() {
+    let dir = std::env::temp_dir().join(format!("pc-browser-thumb-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("fixture dir");
+    let image = photocraft_codecs::Image::from_u8(2, 1, photocraft_codecs::ChannelLayout::Rgba, vec![255, 0, 0, 255, 0, 0, 255, 255]).expect("fixture image");
+    let png = photocraft_codecs::encode(&image, photocraft_codecs::Format::Png, &photocraft_codecs::EncodeOptions::default()).expect("fixture png");
+    std::fs::write(dir.join("photo.png"), png).expect("write fixture png");
+
+    let browser = Browser::shared();
+    let mut harness = harness(&browser);
+    let (reply, rx) = reply(&harness.ctx);
+    browser.begin_open(true, Some(dir.to_string_lossy().into_owned()), None, reply);
+    harness.run_steps(3);
+    assert!(browser.is_active(), "the browser opens");
+    harness.get_by_label("Files").click();
+    harness.run_steps(3);
+
+    let before = harness.get_by_label("       photo.png").rect().height();
+    let grown = wait_for(&mut harness, |h| h.get_by_label("       photo.png").rect().height() > 40.0);
+    assert!(grown, "the row shows the decoded image (was {before:.1} pt tall)");
+
+    // The thumbnail is a preview, not a pick: the row still answers its path.
+    harness.get_by_label("       photo.png").click();
+    harness.run_steps(3);
+    assert_eq!(recv(&rx), Some(Some(FileDialogAnswer::Paths(vec![dir.join("photo.png").to_string_lossy().into_owned()]))));
+    assert!(!browser.is_active());
+}
+
+/// A camera RAW that carries its preview as an embedded JPEG (ARW, NEF and their kin) shows
+/// that preview, even though the container itself is not a decodable picture.
+#[test]
+fn a_raw_file_row_shows_its_embedded_jpeg_preview() {
+    let dir = std::env::temp_dir().join(format!("pc-browser-raw-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("fixture dir");
+    let image = photocraft_codecs::Image::from_u8(256, 192, photocraft_codecs::ChannelLayout::Rgba, vec![80u8; 256 * 192 * 4]).expect("fixture image");
+    let jpeg = photocraft_codecs::encode(&image, photocraft_codecs::Format::Jpeg, &photocraft_codecs::EncodeOptions::default()).expect("fixture jpeg");
+    // A RAW-shaped container: a TIFF-ish header, then the preview deep enough that the whole
+    // file is not a picture.
+    let mut raw = vec![0x49, 0x49, 0x2A, 0x00];
+    raw.extend(std::iter::repeat_n(0xAB, 512));
+    raw.extend_from_slice(&jpeg);
+    raw.extend(std::iter::repeat_n(0xCD, 512));
+    std::fs::write(dir.join("DSC01234.ARW"), raw).expect("write fixture raw");
+
+    let browser = Browser::shared();
+    let mut harness = harness(&browser);
+    let (reply, _rx) = reply(&harness.ctx);
+    browser.begin_open(true, Some(dir.to_string_lossy().into_owned()), None, reply);
+    harness.run_steps(3);
+    harness.get_by_label("Files").click();
+    harness.run_steps(3);
+
+    let grown = wait_for(&mut harness, |h| h.get_by_label("       DSC01234.ARW").rect().height() > 40.0);
+    assert!(grown, "the raw's row shows its embedded preview");
+}
