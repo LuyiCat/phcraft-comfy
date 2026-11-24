@@ -1,0 +1,42 @@
+name: App Store Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "appstore-assets/privacy-policy.html"
+      - "appstore-assets/support.html"
+      - ".github/workflows/appstore-pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: appstore-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Publish the privacy policy and support pages
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Stage the App Store pages
+        run: |
+          mkdir -p _site
+          cp appstore-assets/privacy-policy.html _site/privacy-policy.html
+          cp appstore-assets/support.html _site/support.html
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
