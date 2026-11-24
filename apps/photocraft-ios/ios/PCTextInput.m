@@ -56,13 +56,13 @@ static void PCQueueCommit(NSString *text) {
 }
 @end
 
-@interface WinitUIView : UIView
+// winit registers WinitUIView through objc2 at runtime; there is no static Objective-C class
+// symbol for a category to link against. Keep the implementations on this never-instantiated
+// view class, then copy them to WinitUIView once its first frame proves the class exists.
+@interface PCTextInputMethods : UIView <UITextInput>
 @end
 
-@interface WinitUIView (PCTextInput) <UITextInput>
-@end
-
-@implementation WinitUIView (PCTextInput)
+@implementation PCTextInputMethods
 
 static char PCTextInputStateKey;
 
@@ -282,3 +282,29 @@ static char PCTextInputStateKey;
 }
 
 @end
+
+__attribute__((visibility("default"))) void pc_install_text_input(void) {
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        Class target = objc_getClass("WinitUIView");
+        if (target == Nil) {
+            NSLog(@"PCTextInput: WinitUIView is not registered yet");
+            return;
+        }
+        class_addProtocol(target, @protocol(UITextInput));
+        unsigned int count = 0;
+        Method *methods = class_copyMethodList([PCTextInputMethods class], &count);
+        for (unsigned int index = 0; index < count; index++) {
+            SEL selector = method_getName(methods[index]);
+            IMP implementation = method_getImplementation(methods[index]);
+            Method existing = class_getInstanceMethod(target, selector);
+            if (existing != NULL) {
+                method_setImplementation(existing, implementation);
+            } else {
+                class_addMethod(target, selector, implementation, method_getTypeEncoding(methods[index]));
+            }
+        }
+        free(methods);
+        NSLog(@"PCTextInput: installed %u methods on WinitUIView", count);
+    });
+}

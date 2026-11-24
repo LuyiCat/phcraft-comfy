@@ -395,6 +395,12 @@ impl eframe::App for IosShell {
     fn logic(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         if self.frames == 0 {
             breadcrumb("first frame");
+            #[cfg(target_os = "ios")]
+            unsafe extern "C" {
+                safe fn pc_install_text_input();
+            }
+            #[cfg(target_os = "ios")]
+            pc_install_text_input();
         }
         // `PHOTOCRAFT_DEBUG_IOS`: the view/layer/drawable geometry once, to name any present-path
         // mismatch (the anisotropic-stretch diagnosis).
