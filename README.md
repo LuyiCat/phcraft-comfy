@@ -55,8 +55,8 @@ Android（从仓库根目录，产出签名 APK 于 `out/android/PhotoComfy.apk`
 apps/photocraft-android/android/build.sh out/android
 ```
 
-iOS：用 Xcode 打开 `apps/photocraft-ios/ios/PhotoComfy.xcodeproj`，选择 PhotoComfy scheme 与目标设备后直接 Run / Archive
-（本仓库规定 iOS 只通过 Xcode 图形界面构建，不用命令行驱动）。
+iOS：用 Xcode 打开 `apps/photocraft-ios/ios/PhotoComfy.xcodeproj`，选择 PhotoComfy scheme 与目标设备后直接 Run / Archive；
+也可使用 `xcodebuild` 构建、归档，并按 `agent.md` 的发布流程通过命令行上传 App Store Connect。
 
 macOS 桌面端：
 

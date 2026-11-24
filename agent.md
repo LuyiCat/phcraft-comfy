@@ -20,13 +20,13 @@
 - 明确允许必须针对当前任务专门作出，不得从过往授权、其他平台授权或第 11 节 iOS 发布授权中推断。
 - 违反本禁令的改动一律不得提交或推送；发现误改时立即恢复原状并在交付说明中报告。
 
-### 1.2 iOS 端只允许使用 Xcode 构建和模拟
+### 1.2 iOS 端使用 Xcode 工具链构建、归档和上传
 
-- iOS / iPadOS 的开发、构建、签名、安装、运行、归档和上传只使用 **Xcode 图形界面**。统一打开 `apps/photocraft-ios/ios/PhotoComfy.xcodeproj`，在 Xcode 中选择 scheme、运行目标、签名团队和配置。
-- 模拟只在 Xcode 选择的 iOS / iPadOS Device 上进行，通过 Xcode 的 **Run** 启动；需要查看模拟设备窗口时只使用 Xcode 自带的 DeviceHub。也可以在 Xcode 中选择已连接的真机运行。
-- 禁止使用 `apps/photocraft-ios/ios/build.sh`、直接调用 Cargo 构建 iOS target、`xcodebuild`、`xcrun`、`simctl`、独立 Simulator，以及其他 IDE、构建工具、模拟器或安装工具替代 Xcode。不得通过终端命令间接驱动上述流程。
+- iOS / iPadOS 使用 `apps/photocraft-ios/ios/PhotoComfy.xcodeproj` 中的 scheme、签名团队和配置。允许通过 **Xcode 图形界面**或命令行 `xcodebuild` 开发、构建、签名、归档和上传；允许使用 `xcrun` 配合 Xcode 工具链完成 App Store Connect 上传。
+- 仓库所有者已明确授权按第 11 节通过命令行上传 App Store Connect，无需逐次确认。使用本机已配置的 Xcode 签名、App Store Connect API Key 或钥匙串凭据；不得在聊天、日志或仓库中索取、输出或保存密码、私钥及完整凭据内容。
+- 需要运行验证时，可以在 Xcode 中选择 iOS / iPadOS Device 并执行 **Run**，通过 Xcode 自带的 DeviceHub 查看模拟设备；也可以在 Xcode 中选择已连接的真机运行。
 - 共享 Rust 代码仍可按第 7 节运行主机上的格式检查、Clippy 和定向测试；这些检查不属于 iOS 构建，也不能替代 Xcode 构建及 Device 上的实际验证。
-- iOS 交付必须明确记录 Xcode 构建结果和所选 Device 的手工验证结果；未实际执行时不得声称 iOS 已验证。
+- iOS 交付必须明确记录实际构建、归档、上传结果和已执行的手工验证；未实际执行时不得声称 iOS 已验证或上传成功。上传成功仅代表 App Store Connect 已接收构建，不代表通过 App Review。
 
 ## 2. Git 核心原则
 
@@ -499,9 +499,9 @@ AIGC transport: disabled (explicit override)
 2. 按第 11.2 节递增版本号和构建号，形成独立版本提交。
 3. 确认 `main` 已同步、工作区干净，并确认本次上传版本不包含 AIGC。
 4. 使用无 AIGC 配置完成应用启动和合规点手工检查。
-5. 在 Xcode 的项目或 scheme 设置中明确设置 `PHOTOCOMFY_DISABLE_AIGC=YES`，选择 **Any iOS Device**，依次执行 **Clean Build Folder** 和 **Product ▸ Archive**。不得改用命令行归档。
-6. 在 Xcode 的构建日志、归档内容和签名界面检查 AIGC 禁用状态、签名结果及 archive 版本信息；任何一项不符都停止上传并重新构建。
-7. 在 Xcode Organizer 中选择该 archive，通过 **Distribute App ▸ App Store Connect ▸ Upload** 直接上传，不使用导出脚本或命令行工具。
+5. 在 Xcode 的项目或 scheme 设置中明确设置 `PHOTOCOMFY_DISABLE_AIGC=YES`，选择 **Any iOS Device** 执行 **Clean Build Folder** 和 **Product ▸ Archive**；或使用 `xcodebuild -configuration Release -destination 'generic/platform=iOS' archive`，并显式传入 `PHOTOCOMFY_DISABLE_AIGC=YES`。
+6. 在 Xcode 构建日志或 `xcodebuild` 日志、归档内容和签名结果中检查 AIGC 禁用状态、签名及 archive 版本信息；任何一项不符都停止上传并重新构建。
+7. 在 Xcode Organizer 中选择该 archive，通过 **Distribute App ▸ App Store Connect ▸ Upload** 上传；或使用 `xcodebuild -exportArchive` 配合 `ExportOptions.plist`（`destination=upload`）通过命令行上传。不得上传包含 AIGC 的构建。
 
 8. 上传后继续按既定 App Store Connect 流程提交该无 AIGC 构建供审核，不等待另行提醒，不上传包含 AIGC 的对照包。
 9. 确认 App Store Connect 已接收对应的版本号和构建号，记录上传结果。`Processing` 只表示 Apple 正在处理，不得描述为审核通过。

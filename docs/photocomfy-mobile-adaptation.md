@@ -28,8 +28,8 @@
 
 - Xcode 原生工程 `ios/PhotoComfy.xcodeproj`，Rust 侧由 build script 编译
   `aarch64-apple-ios` / simulator target。
-- 本仓库规定：iOS 的开发、构建、运行、归档、上传**只通过 Xcode 图形界面**
-  （见 `agent.md` §1.2），不用 `xcodebuild` / `simctl` 等命令行驱动。
+- iOS 的开发、构建、归档和上传使用 Xcode 工具链，可通过 Xcode 图形界面操作，
+  也可按 `agent.md` §1.2、§11 使用 `xcodebuild` / `xcrun` 命令行构建、归档并上传 App Store Connect。
 - **AIGC 合规**：所有上传 App Store Connect 的构建必须在编译期移除 AIGC
   （`PHOTOCOMFY_DISABLE_AIGC=YES`，构建日志出现 `AIGC transport: disabled (explicit override)`）。
   本地 Debug 构建可以保留，但不得上传。
