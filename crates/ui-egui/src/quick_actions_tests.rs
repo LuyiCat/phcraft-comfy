@@ -80,30 +80,42 @@ fn tap(h: &mut Harness<'_, PhotocraftApp>, at: egui::Pos2) {
 fn a_floating_window_over_the_column_covers_it_however_the_column_is_tapped() {
     let mut h = touch_harness();
     h.state_mut().session.execute("layer.new.layer", json!({"name": "extra"})).unwrap();
-    // Window › Brush Settings floats by the canvas's top-right corner (brush_panel::window).
     h.state_mut().ui.panels.brush_settings = true;
     h.run_steps(4);
+    let window_id = egui::Id::unique("brush-settings");
+    let window_layer = egui::LayerId::new(egui::Order::Middle, window_id);
     let column_layer = egui::LayerId::new(egui::Order::Background, egui::Id::unique("quick-actions"));
-    let covers =
-        |h: &Harness<'_, PhotocraftApp>, at| h.ctx.layer_id_at(at) == Some(egui::LayerId::new(egui::Order::Middle, egui::Id::unique("brush-settings")));
-    let window = h.ctx.memory(|m| m.area_rect(egui::Id::unique("brush-settings"))).expect("Brush Settings floats");
+    let covers = |h: &Harness<'_, PhotocraftApp>, at| h.ctx.layer_id_at(at) == Some(window_layer);
     let undo = column_button(&h, "Undo").expect("Undo").rect();
-    assert!(covers(&h, undo.center()), "the window lies over the column's buttons: {window:?} vs {undo:?}");
-    // The sliver of Undo the window leaves showing answers a tap, which brings the column to the
-    // front of its own order — under the window still.
-    let sliver = [egui::pos2(undo.center().x, (undo.top() + window.top()) / 2.0), egui::pos2((window.right() + undo.right()) / 2.0, undo.center().y)]
-        .into_iter()
-        .find(|p| undo.contains(*p) && !window.contains(*p))
-        .expect("a sliver of Undo shows beside the window");
-    assert_eq!(h.ctx.layer_id_at(sliver), Some(column_layer), "the sliver is the column's");
+    // Brush Settings opens by the canvas's top-right corner (brush_panel::window), but where egui
+    // keeps that tall window depends on the layout: wherever it would run off the bottom of the
+    // screen it is lifted over the whole column, with nothing of the buttons showing. So the
+    // window is parked here instead: over the left half of the column, whatever its height.
+    let mut state = egui::AreaState::load(&h.ctx, window_id).expect("Brush Settings floats");
+    let width = state.size.map_or(0.0, |s| s.x);
+    state.set_left_top_pos(egui::pos2(undo.center().x - width, undo.top() - 20.0));
+    h.ctx.memory_mut(|m| m.areas_mut().set_state(window_layer, state));
+    h.run_steps(3);
+    let window = h.ctx.memory(|m| m.area_rect(window_id)).expect("Brush Settings floats");
+    // A quarter across a button is under the window; three quarters is the part still showing.
+    let across = |button: egui::Rect, t: f32| egui::pos2(button.left() + t * button.width(), button.center().y);
+    let (covered, sliver) = (across(undo, 0.25), across(undo, 0.75));
+    assert!(covers(&h, covered), "the window lies over the column's buttons: {window:?} vs {undo:?}");
+    assert_eq!(h.ctx.layer_id_at(sliver), Some(column_layer), "the rest of Undo shows beside the window: {window:?} vs {undo:?}");
+    // The covered part takes no tap.
+    tap(&mut h, covered);
+    assert_eq!(layer_names(&h), ["Background", "extra"], "the covered part of Undo took no tap");
+    // The part showing answers a tap, which brings the column to the front of its own order —
+    // under the window still.
     tap(&mut h, sliver);
-    assert_eq!(layer_names(&h), ["Background"], "the visible sliver of Undo took the tap");
+    assert_eq!(layer_names(&h), ["Background"], "the visible part of Undo took the tap");
     let redo = column_button(&h, "Redo").expect("Redo").rect();
-    assert!(covers(&h, redo.center()), "the window still covers the column after a tap on the column");
     assert!(h.state().session.is_enabled("edit.redo"), "so a tap on that Redo would redo");
-    tap(&mut h, redo.center());
+    let redo_covered = across(redo, 0.25);
+    assert!(covers(&h, redo_covered), "the window still covers the column after taps on the column");
+    tap(&mut h, redo_covered);
     assert_eq!(layer_names(&h), ["Background"], "the covered Redo took no tap");
-    assert!(covers(&h, redo.center()), "and the window is still there over it");
+    assert!(covers(&h, redo_covered), "and the window is still there over it");
 }
 
 #[test]
