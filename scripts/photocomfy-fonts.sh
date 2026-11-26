@@ -76,14 +76,22 @@ fetch() {
         echo "fetching $rel <- $url" >&2
         rm -f "$dest"
         out="$dest.part"
-        if download "$url" "$out"; then
+        # A slow link drops a long download now and then; start it over a couple of times.
+        attempt=0
+        until download "$url" "$out"; do
+            attempt=$((attempt + 1))
+            [ "$attempt" -lt 3 ] || break
+            echo "photocomfy-fonts: retrying $url ($attempt)" >&2
+            sleep 5
+        done
+        if [ -f "$out" ]; then
             if [ -n "$member" ]; then
-                unzip -p "$dest.part" "$member" > "$dest" 2>/dev/null || rm -f "$dest"
-                rm -f "$dest.part"
+                unzip -p "$out" "$member" > "$dest" 2>/dev/null || rm -f "$dest"
             else
-                mv "$dest.part" "$dest"
+                mv "$out" "$dest"
             fi
         fi
+        rm -f "$out"
         if [ -f "$dest" ]; then
             got="$(sha256 "$dest")"
             if [ "$got" = "$want" ]; then
