@@ -23,6 +23,13 @@ the embedded craft-fonts faces: `ios/build.sh` picks up the project-root checkou
 require it and stop with an error if it is absent, rather than shipping missing glyphs. The system locale (for the
 interface language and the CJK script choice) is read from `NSLocale` at startup.
 
+The Type tool also offers the PhotoComfy font pack ([docs/photocomfy-fonts.md](../../docs/photocomfy-fonts.md)):
+19 Chinese families — Noto Sans and Serif in the Simplified and Traditional sets, LXGW WenKai Lite, Smiley Sans,
+Zhuque Fangsong, Yozai, the ZCOOL faces and the handwriting faces — that `ios/build.sh` embeds after the craft
+fonts. The pack is not in git: the first build that needs it runs `scripts/photocomfy-fonts.sh` (about 190 MB of
+downloads into the ignored `photocomfy-fonts/`, checked against `scripts/photocomfy-fonts.lock`), then sets
+`PHOTOCOMFY_FONTS_DIR`. The licence texts of every embedded font ship inside the bundle as `Licences/`.
+
 ## Build and run
 
 Use **Xcode only** for iOS builds, signing, installation, simulation and device runs. Open

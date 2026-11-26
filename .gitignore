@@ -9,6 +9,8 @@ target/
 /temp
 /book/output
 /craft-fonts
+# The PhotoComfy Chinese font pack that scripts/photocomfy-fonts.sh downloads (docs/photocomfy-fonts.md).
+/photocomfy-fonts
 *.log
 __pycache__/
 .DS_Store

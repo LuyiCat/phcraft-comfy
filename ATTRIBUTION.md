@@ -90,6 +90,27 @@ from it is committed here. Per-file authors, sources and licences:
 | Shippori Mincho Regular (FONTDASU) | Japanese serif Type fallback (desktop) | SIL OFL 1.1, shipped as `OFL-shippori-mincho.txt` |
 | BIZ UDMincho Regular (Morisawa) | Japanese serif Type fallback (desktop) | SIL OFL 1.1, shipped as `OFL-biz-ud-mincho.txt` |
 
+### Optional build input: PhotoComfy font pack (not files in this repo)
+
+The iOS and Android builds (`PHOTOCOMFY_FONTS_DIR`) also embed the PhotoComfy Chinese font pack for
+the Type tool, where no system font can be read; see [docs/photocomfy-fonts.md](docs/photocomfy-fonts.md).
+No font file from it is committed here: `scripts/photocomfy-fonts.sh` downloads the files named in
+[`scripts/photocomfy-fonts.lock`](scripts/photocomfy-fonts.lock) — each with its SHA-256, pinned source
+and licence — byte-identical to those sources. Their licence texts ship inside the app (iOS `Licences/`,
+Android `assets/fonts-licences/`), together with those of craft-fonts, Inter and JetBrains Mono.
+
+| Font (embedded at build time) | Source | License |
+|---|---|---|
+| Noto Sans SC, Noto Serif SC, Noto Sans TC, Noto Serif TC (variable) | [google/fonts](https://github.com/google/fonts) (`ofl/notosanssc`, `notoserifsc`, `notosanstc`, `notoseriftc`), Adobe and Google | SIL OFL 1.1 |
+| LXGW WenKai Lite Regular, Medium | [lxgw/LxgwWenKai-Lite](https://github.com/lxgw/LxgwWenKai-Lite) | SIL OFL 1.1 |
+| Smiley Sans Oblique | [atelier-anchor/smiley-sans](https://github.com/atelier-anchor/smiley-sans) | SIL OFL 1.1 |
+| LXGW Neo XiHei Plus Regular | [lxgw/LxgwNeoXiHei](https://github.com/lxgw/LxgwNeoXiHei) | IPA Font License 1.0 |
+| DouyinSans Bold | [bytedance/fonts](https://github.com/bytedance/fonts) | SIL OFL 1.1 |
+| Zhuque Fangsong Regular | [TrionesType/zhuque](https://github.com/TrionesType/zhuque) | SIL OFL 1.1 |
+| Yozai Regular | [lxgw/yozai-font](https://github.com/lxgw/yozai-font) | SIL OFL 1.1 |
+| Chill Round Gothic Regular, Bold | [Warren2060/ChillRoundGothic](https://github.com/Warren2060/ChillRoundGothic) | SIL OFL 1.1 |
+| Ma Shan Zheng, ZCOOL KuaiLe, ZCOOL QingKe HuangYou, ZCOOL XiaoWei, Long Cang, Zhi Mang Xing, Liu Jian Mao Cao, LXGW Marker Gothic | [google/fonts](https://github.com/google/fonts) | SIL OFL 1.1 |
+
 The other built-in ICC profiles and the generated LUT looks are produced by code at runtime
 (`crates/cms/src/builtin.rs`, `crates/cms/src/lutfile.rs`) and dedicated to the public domain
 (CC0-1.0); they are not separate files.

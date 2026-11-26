@@ -130,6 +130,7 @@
 				"$(SRCROOT)/PCTextInput.m",
 				"$(SRCROOT)/PhotoComfy/Info.plist",
 			);
+				"$(SRCROOT)/../../../photocomfy-fonts/fonts/manifest.txt",
 			name = "Build the PhotoComfy binary with Cargo";
 			outputPaths = (
 				"$(DERIVED_FILE_DIR)/photocomfy.stamp",

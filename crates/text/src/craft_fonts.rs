@@ -1,14 +1,16 @@
 //! Fonts from the optional craft-fonts build input (https://github.com/storytold/craft-fonts).
 //!
 //! `CRAFT_FONTS` is empty unless the app was built with `CRAFT_FONTS_DIR=<craft-fonts checkout>`
-//! (see `build.rs`); every user of it must work when it is empty. It carries every font in the
-//! checkout's `fonts/manifest.txt`, whatever its scripts: the Japanese fonts BIZ UDPGothic (UI) and
-//! Shippori Mincho / BIZ UDMincho (serif document text) and, in newer checkouts, fonts for other
-//! scripts such as Noto Sans CJK SC, Noto Sans Arabic and Noto Sans Thai.
-//! [`crate::fonts::FontDb::new`] registers all of them. The web build (wasm32) embeds none of
-//! them: they don't fit its size cap (see `build.rs`).
+//! or `PHOTOCOMFY_FONTS_DIR=<PhotoComfy font pack>` (see `build.rs`); every user of it must work
+//! when it is empty. It carries every font in the checkout's `fonts/manifest.txt`, whatever its
+//! scripts: the Japanese fonts BIZ UDPGothic (UI) and Shippori Mincho / BIZ UDMincho (serif
+//! document text) and, in newer checkouts, fonts for other scripts such as Noto Sans CJK SC, Noto
+//! Sans Arabic and Noto Sans Thai. The iOS and Android builds append the PhotoComfy font pack
+//! (docs/photocomfy-fonts.md), the Chinese faces the Type tool offers where no system font can be
+//! read. [`crate::fonts::FontDb::new`] registers all of them. The web build (wasm32) embeds none
+//! of them: they don't fit its size cap (see `build.rs`).
 
-/// A font from the optional craft-fonts build input (empty unless built with `CRAFT_FONTS_DIR`).
+/// A font from an optional embedded-fonts build input (empty unless built with `CRAFT_FONTS_DIR`).
 pub struct CraftFont {
     pub family: &'static str,
     pub style: &'static str,

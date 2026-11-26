@@ -23,6 +23,13 @@ https://github.com/storytold/craft-fonts/blob/main/ATTRIBUTION.md (today BIZ UDP
 BIZ UDMincho; not the web build), under the SIL Open Font License 1.1. Their licence texts
 ship with the package as OFL-<family>.txt.
 
+The PhotoComfy iOS and Android builds also embed the PhotoComfy Chinese font pack (Noto Sans and Noto
+Serif in the Simplified and Traditional sets, LXGW WenKai Lite, Smiley Sans, DouyinSans, Zhuque Fangsong,
+Yozai, Chill Round Gothic, Ma Shan Zheng, the ZCOOL faces, Long Cang, Zhi Mang Xing, Liu Jian Mao Cao and
+LXGW Marker Gothic under the SIL Open Font License 1.1; LXGW Neo XiHei Plus under the IPA Font License
+1.0). Sources and licences are in docs/photocomfy-fonts.md and ATTRIBUTION.md; the licence texts ship
+inside the app.
+
 Linux Wayland window decorations
 -------------------------------
 sctk-adwaita 0.10.1 (https://github.com/PolyMeilex/sctk-adwaita,

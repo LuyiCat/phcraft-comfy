@@ -45,6 +45,9 @@
   界面缩放按屏幕物理尺寸计算，不会自己来回抖动。
 - **品牌与合规**：移动端品牌为 PhotoComfy；所有上传 App Store Connect 的构建在编译期移除 AIGC 功能
   （`PHOTOCOMFY_DISABLE_AIGC=YES`）。
+- **中文字体**：iOS / Android 读不到系统字体，移动端构建除 craft-fonts 外还嵌入 PhotoComfy 中文字体包
+  （思源黑体、思源宋体、霞鹜文楷、得意黑、朱雀仿宋等 19 个家族）；字体文件不入库，由
+  `scripts/photocomfy-fonts.sh` 按锁文件下载并校验，详见 [`docs/photocomfy-fonts.md`](docs/photocomfy-fonts.md)。
 - **发布工程**：GitHub Actions tag 驱动的 Release 工作流、Android 正式签名 keystore（不进仓库，存于受控位置与 GitHub Secrets）。
 
 ## 构建

@@ -110,6 +110,19 @@ if [ -z "${CRAFT_FONTS_DIR:-}" ]; then
 fi
 export CRAFT_FONTS_REQUIRED=1
 
+# The PhotoComfy font pack (docs/photocomfy-fonts.md): the Chinese faces the Type tool offers.
+# About 190 MB, fetched on the first build that needs it and kept in the ignored
+# `photocomfy-fonts/` directory. PHOTOCOMFY_FONTS_DIR set outside wins and must already hold the
+# pack (scripts/photocomfy-fonts.sh <directory> fills one in).
+if [ -z "${PHOTOCOMFY_FONTS_DIR:-}" ]; then
+    if [ ! -f "$REPO/photocomfy-fonts/fonts/manifest.txt" ]; then
+        "$REPO/scripts/photocomfy-fonts.sh" "$REPO/photocomfy-fonts"
+    fi
+    PHOTOCOMFY_FONTS_DIR="$REPO/photocomfy-fonts"
+    export PHOTOCOMFY_FONTS_DIR
+fi
+export PHOTOCOMFY_FONTS_REQUIRED=1
+
 VERSION="$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)"
 [ -n "$VERSION" ] || VERSION="0.0.0"
 # The store build number: raise by one for every release, never reuse or rewind it.
@@ -132,6 +145,9 @@ mkdir -p "$WORK/pkg/lib/$ABI" "$OUT_DIR"
 cp "$SO" "$WORK/pkg/lib/$ABI/"
 "$BT/aapt2" compile --dir "$(dirname "$0")/res" -o "$WORK/resources.zip"
 "$BT/aapt2" link \
+# The licence texts of the fonts embedded in that library (the SIL Open Font License requires
+# them to travel with the font), as APK assets.
+"$REPO/scripts/font-licences.sh" "$WORK/pkg/assets/fonts-licences"
     -I "$PLATFORM/android.jar" \
     -R "$WORK/resources.zip" \
     --manifest "$(dirname "$0")/AndroidManifest.xml" \
@@ -148,7 +164,7 @@ find "$WORK/classes" -name '*.class' -print > "$WORK/classes.list"
 cp "$WORK/dex/classes.dex" "$WORK/pkg/classes.dex"
 
 # extractNativeLibs="true" in the manifest, so the library may ride compressed in the zip.
-cd "$WORK/pkg" && zip -qr "$WORK/base.apk" lib classes.dex
+cd "$WORK/pkg" && zip -qr "$WORK/base.apk" lib classes.dex assets
 cd "$REPO"
 
 "$BT/zipalign" -f 4 "$WORK/base.apk" "$WORK/aligned.apk"

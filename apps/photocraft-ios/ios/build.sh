@@ -108,6 +108,19 @@ if [ -z "${CRAFT_FONTS_DIR:-}" ]; then
 fi
 export CRAFT_FONTS_REQUIRED=1
 
+# The PhotoComfy font pack (docs/photocomfy-fonts.md): the Chinese faces the Type tool offers,
+# since iPadOS lets no app read the system's. About 190 MB, fetched on the first build that needs
+# it and kept in the ignored `photocomfy-fonts/` directory. PHOTOCOMFY_FONTS_DIR set outside wins
+# and must already hold the pack (scripts/photocomfy-fonts.sh <directory> fills one in).
+if [ -z "${PHOTOCOMFY_FONTS_DIR:-}" ]; then
+    if [ ! -f "$REPO/photocomfy-fonts/fonts/manifest.txt" ]; then
+        "$REPO/scripts/photocomfy-fonts.sh" "$REPO/photocomfy-fonts"
+    fi
+    PHOTOCOMFY_FONTS_DIR="$REPO/photocomfy-fonts"
+    export PHOTOCOMFY_FONTS_DIR
+fi
+export PHOTOCOMFY_FONTS_REQUIRED=1
+
 # The pinned winit/egui forks carry three fixes that live only as patch files
 # (../patches/README.md): taps landing below their targets on iOS, the safe-area insets, and the
 # zoom-rescale jitter. They were applied to the cargo git checkouts by hand, which any cargo
@@ -182,6 +195,9 @@ fi
 APP="$OUT_DIR/$PRODUCT.app"
 mkdir -p "$APP"
 cp "$BIN" "$APP/$PRODUCT"
+# The licence texts of the fonts embedded in that binary (the SIL Open Font License requires them
+# to travel with the font): Licences/ inside the bundle, which Xcode signs with the rest.
+"$REPO/scripts/font-licences.sh" "$APP/Licences"
 # Standalone runs (simctl install) need the bundle metadata too; under Xcode the Info.plist
 # step provides it, so only fill in what's missing. The placeholders are Xcode build settings;
 # standalone they get the same values the target's settings carry.

@@ -109,6 +109,13 @@ runs the same ABI). `PROFILE=debug` selects the Cargo profile. The project-root 
 checkout is picked up exactly like an iPadOS build. It is required: the build stops if it is
 absent instead of shipping missing CJK or other non-Latin glyphs.
 
+The PhotoComfy font pack ([docs/photocomfy-fonts.md](../../docs/photocomfy-fonts.md)) rides
+along the same way: 19 Chinese families for the Type tool, embedded after the craft fonts. It is
+not in git — the first build that needs it runs `scripts/photocomfy-fonts.sh` (about 190 MB of
+downloads into the ignored `photocomfy-fonts/`, checked against `scripts/photocomfy-fonts.lock`)
+and sets `PHOTOCOMFY_FONTS_DIR`. The licence texts of every embedded font ship inside the APK as
+`assets/fonts-licences/`.
+
 The build also compiles `android/res` with aapt2: the manifest's launcher icon uses the
 mobile design from `assets/app-icon/photocomfy-mobile.svg`. Android 8+ uses adaptive
 background/foreground layers, preserving the mark under round and rounded-square masks.
@@ -192,3 +199,6 @@ on the emulator image, it falls back to GLES; on real devices Vulkan is the norm
   error.
 - **Text renders as boxes**: built without the project-root craft-fonts checkout (`craft-fonts/`)
   on a device whose `/system/fonts` (or the fonts APEX) has no readable CJK collection.
+- **No Chinese fonts in the Type tool**: the build could not fetch the PhotoComfy font pack.
+  Run `scripts/photocomfy-fonts.sh` and read which file or URL failed; the build stops with the
+  same error rather than shipping without the pack.

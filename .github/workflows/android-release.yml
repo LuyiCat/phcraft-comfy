@@ -35,6 +35,13 @@ jobs:
           path: craft-fonts
           persist-credentials: false
 
+      # The PhotoComfy Chinese font pack (docs/photocomfy-fonts.md): downloaded and checked against
+      # its lock, like the fonts above, and embedded by apps/photocraft-android/android/build.sh.
+      - name: Fetch the PhotoComfy font pack
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/photocomfy-fonts.sh
+
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           targets: aarch64-linux-android

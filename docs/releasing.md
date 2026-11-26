@@ -30,6 +30,10 @@
 6. 由 tag 或受控手动工作流构建发布产物；Release 说明只列出实际构建并验证过的平台。
 7. tag 创建后不得移动、重用或改指其他提交；版本有误时递增版本号并创建新 tag。
 
+## 移动端字体
+
+iOS 和 Android 构建嵌入 craft-fonts 之外，还嵌入 PhotoComfy 中文字体包（19 个家族，约 192 MB，见 [`photocomfy-fonts.md`](photocomfy-fonts.md)）。字体文件不入库：本地构建在 `photocomfy-fonts/fonts/manifest.txt` 缺失时由 `scripts/photocomfy-fonts.sh` 自动下载，GitHub Actions 的 Android 任务在上游字体之后运行同一脚本。许可证文本随应用分发（iOS 的 `Licences/`、APK 的 `assets/fonts-licences/`）。
+
 ## macOS 打包与签名验证
 
 `packaging/macos/package.sh` 构建 universal（Apple silicon + Intel）DMG，这也是 agent.md 第 8 节规定的 macOS 发布包门禁。正式产物使用 Developer ID 签名并公证；本地无证书时脚本 ad-hoc 签名并跳过公证，只能用于本地检查，不得冒充正式发布包：

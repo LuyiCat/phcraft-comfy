@@ -16,29 +16,48 @@
 //!
 //! Also deflates the bundled UI fonts (`assets/fonts/*.ttf`, `fonts::BUNDLED`) into
 //! `OUT_DIR/fonts/<file>.deflate`: 0.73 MB of binary instead of 1.5 MB, for the same size gate.
+//!
+//! The PhotoComfy font pack (docs/photocomfy-fonts.md) is a second optional input in the same
+//! manifest format: with `PHOTOCOMFY_FONTS_DIR=<pack dir>` its faces join `CRAFT_FONTS` after the
+//! craft fonts. The iOS and Android build scripts set it (and `PHOTOCOMFY_FONTS_REQUIRED=1`, which
+//! turns a missing or bad pack into an error); desktop and web builds leave it unset.
 use std::fmt::Write as _;
 use std::path::PathBuf;
 
 fn main() {
-    println!("cargo::rerun-if-env-changed=CRAFT_FONTS_DIR");
-    println!("cargo::rerun-if-env-changed=CRAFT_FONTS_REQUIRED");
     let wasm = std::env::var("CARGO_CFG_TARGET_ARCH").is_ok_and(|a| a == "wasm32");
     let mut src = String::from("pub static CRAFT_FONTS: &[CraftFont] = &[\n");
-    if let Some(dir) = std::env::var_os("CRAFT_FONTS_DIR").filter(|d| !d.is_empty() && !wasm).map(PathBuf::from) {
-        match craft_fonts(&dir) {
-            Ok(entries) => src.push_str(&entries),
-            Err(e) if std::env::var_os("CRAFT_FONTS_REQUIRED").is_some() => {
-                println!("cargo::error=CRAFT_FONTS_DIR={}: {e}", dir.display());
-            }
-            Err(e) => println!("cargo::warning=building without craft-fonts: CRAFT_FONTS_DIR={}: {e}", dir.display()),
-        }
-    }
+    embed_manifest("CRAFT_FONTS_DIR", "CRAFT_FONTS_REQUIRED", "craft-fonts", wasm, &mut src);
+    embed_manifest("PHOTOCOMFY_FONTS_DIR", "PHOTOCOMFY_FONTS_REQUIRED", "the PhotoComfy font pack", wasm, &mut src);
     src.push_str("];\n");
     let out = PathBuf::from(std::env::var_os("OUT_DIR").unwrap_or_default()).join("craft_fonts.rs");
     if let Err(e) = std::fs::write(&out, src) {
         println!("cargo::error=writing {}: {e}", out.display());
     }
     deflate_bundled_fonts();
+}
+
+/// Appends the `CraftFont { .. }` initialisers of the `fonts/manifest.txt` in the directory named
+/// by `dir_var` (`what`, in messages), when it is set (and not a wasm32 build). A bad directory is
+/// a warning, or an error with `required_var` set — which also makes the variable's absence an
+/// error.
+fn embed_manifest(dir_var: &str, required_var: &str, what: &str, wasm: bool, src: &mut String) {
+    println!("cargo::rerun-if-env-changed={dir_var}");
+    println!("cargo::rerun-if-env-changed={required_var}");
+    let required = std::env::var_os(required_var).is_some();
+    let Some(dir) = std::env::var_os(dir_var).filter(|d| !d.is_empty() && !wasm).map(PathBuf::from) else {
+        if required {
+            println!("cargo::error={required_var} is set but {dir_var} is missing");
+        }
+        return;
+    };
+    match craft_fonts(&dir) {
+        Ok(entries) => src.push_str(&entries),
+        Err(e) if required => {
+            println!("cargo::error={dir_var}={}: {e}", dir.display());
+        }
+        Err(e) => println!("cargo::warning=building without {what}: {dir_var}={}: {e}", dir.display()),
+    }
 }
 
 /// Deflate the bundled fonts into `OUT_DIR/fonts/` (`fonts::BUNDLED` includes them).
