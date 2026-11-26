@@ -1,4 +1,5 @@
 #import <UIKit/UIKit.h>
+#import <objc/message.h>
 #import <objc/runtime.h>
 
 extern void pc_ime_text(const unsigned char *text, NSUInteger len);
@@ -281,6 +282,19 @@ static char PCTextInputStateKey;
     return [self pc_rangeFrom:at to:at + 1];
 }
 
+// Required by UITextInput. egui orders bidirectional text itself, so the storage direction is
+// whatever the characters say and there is nothing to force.
+- (NSWritingDirection)baseWritingDirectionForPosition:(UITextPosition *)position inDirection:(UITextStorageDirection)direction {
+    (void)position;
+    (void)direction;
+    return NSWritingDirectionNatural;
+}
+
+- (void)setBaseWritingDirection:(NSWritingDirection)writingDirection forRange:(UITextRange *)range {
+    (void)writingDirection;
+    (void)range;
+}
+
 @end
 
 __attribute__((visibility("default"))) void pc_install_text_input(void) {
@@ -308,3 +322,65 @@ __attribute__((visibility("default"))) void pc_install_text_input(void) {
         NSLog(@"PCTextInput: installed %u methods on WinitUIView", count);
     });
 }
+
+#if PC_TYPE_PROBE
+// Testing aid for the Rust shell (src/main.rs, PHOTOCRAFT_TYPE_PROBE): the calls a pinyin
+// keyboard makes on its text input view, replayed one per step on the real first responder, so a
+// simulator run proves Chinese composition without a finger. Development builds only: build.rs
+// defines PC_TYPE_PROBE beside the default `aigc` feature, which App Store uploads leave out.
+
+// m:<marked>:<selection> sets marked text, i:<text> commits text, u unmarks, d is deleteBackward.
+static NSArray<NSString *> *PCProbeSteps(void) {
+    return @[
+        @"m:z:1", @"m:zh:2", @"m:zho:3", @"m:zhon:4", @"m:zhong:5", @"i:中",
+        @"m:wen:3", @"i:文", @"m:ce:2", @"i:测", @"m:shi:3", @"i:试",
+        @"d", @"d", @"m:zi:2", @"i:字", @"m:ti:2", @"i:体",
+        @"m:shu:3", @"u", @"i:书",
+    ];
+}
+
+static UIView<UITextInput> *PCProbeFirstResponder(void) {
+    for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+        if (![scene isKindOfClass:UIWindowScene.class]) {
+            continue;
+        }
+        for (UIWindow *window in ((UIWindowScene *)scene).windows) {
+            UIView *view = window.rootViewController.view;
+            if ([view conformsToProtocol:@protocol(UITextInput)] && view.isFirstResponder) {
+                return (UIView<UITextInput> *)view;
+            }
+        }
+    }
+    return nil;
+}
+
+__attribute__((visibility("default"))) NSInteger pc_type_probe_step_count(void) {
+    return (NSInteger)PCProbeSteps().count;
+}
+
+// False without a first responder that takes text input: the keyboard would have nothing to
+// type into either.
+__attribute__((visibility("default"))) BOOL pc_type_probe_step(NSInteger step) {
+    UIView<UITextInput> *view = PCProbeFirstResponder();
+    if (view == nil || step < 0 || step >= (NSInteger)PCProbeSteps().count) {
+        return NO;
+    }
+    NSArray<NSString *> *parts = [PCProbeSteps()[(NSUInteger)step] componentsSeparatedByString:@":"];
+    if ([parts[0] isEqualToString:@"m"]) {
+        // UIKit falls back from setMarkedText:selectedRange:replacementRange: to this one.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wundeclared-selector"
+        SEL selector = @selector(setMarkedText:selectedRange:);
+#pragma clang diagnostic pop
+        void (*setMarked)(id, SEL, NSString *, NSRange) = (void (*)(id, SEL, NSString *, NSRange))objc_msgSend;
+        setMarked(view, selector, parts[1], NSMakeRange([parts[2] integerValue], 0));
+    } else if ([parts[0] isEqualToString:@"i"]) {
+        [view insertText:parts[1]];
+    } else if ([parts[0] isEqualToString:@"u"]) {
+        [view unmarkText];
+    } else {
+        [view deleteBackward];
+    }
+    return YES;
+}
+#endif

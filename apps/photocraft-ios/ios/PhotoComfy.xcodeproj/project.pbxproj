@@ -125,6 +125,7 @@
 				"$(SRCROOT)/../src/api_gen.rs",
 				"$(SRCROOT)/../src/long_press.rs",
 				"$(SRCROOT)/../src/ime.rs",
+				"$(SRCROOT)/../src/type_probe.rs",
 				"$(SRCROOT)/PCSceneDelegate.m",
 				"$(SRCROOT)/PCDocumentPicker.m",
 				"$(SRCROOT)/PCTextInput.m",

@@ -24,6 +24,10 @@ mod clipboard;
 mod ime;
 mod long_press;
 mod picker;
+// Development builds only (the `aigc` feature App Store uploads leave out): replays a keyboard
+// session and draws a font specimen where no finger can reach.
+#[cfg(all(target_os = "ios", feature = "aigc"))]
+mod type_probe;
 // Feature-gated with the Image API transport: App Store Review builds pass
 // `--no-default-features`, which drops the optional `ureq` dependency too.
 #[cfg(feature = "aigc")]
@@ -322,6 +326,11 @@ impl IosShell {
         {
             log::warn!("file.open: {e}");
         }
+        // Testing aid: the embedded CJK fonts, one line each (type_probe.rs).
+        #[cfg(all(target_os = "ios", feature = "aigc"))]
+        if std::env::var_os("PHOTOCRAFT_FONT_SPECIMEN").is_some() {
+            type_probe::font_specimen(&mut app);
+        }
         // Long commands and file opens run as background jobs with progress, as on the desktop.
         app.background_jobs = true;
         if let Some(rs) = cc.wgpu_render_state.clone() {
@@ -439,6 +448,11 @@ impl eframe::App for IosShell {
         }
         self.app.logic_frame(ctx, frame);
         self.app.finish_type_reset_logic(ctx);
+        // Testing aid: replay a pinyin keyboard session through the text input view (type_probe.rs).
+        #[cfg(all(target_os = "ios", feature = "aigc"))]
+        if std::env::var_os("PHOTOCRAFT_TYPE_PROBE").is_some() {
+            type_probe::frame(self, ctx);
+        }
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {

@@ -14,13 +14,14 @@ fn main() {
         // under manual retain/release the autoreleased static array dangles after the first pool
         // drain and the next fast-enumeration crashes (NSInvalidArgumentException on the reused
         // memory, PhotoComfy-2026-11-09-003123.ips).
-        cc::Build::new()
-            .file("ios/PCSceneDelegate.m")
-            .file("ios/PCDocumentPicker.m")
-            .file("ios/PCTextInput.m")
-            .flag("-fobjc-arc")
-            .flag("-Wno-deprecated-declarations") // the open picker's document-types init is the pre-UTType API
-            .compile("pcscenedelegate");
+        let mut build = cc::Build::new();
+        build.file("ios/PCSceneDelegate.m").file("ios/PCDocumentPicker.m").file("ios/PCTextInput.m").flag("-fobjc-arc").flag("-Wno-deprecated-declarations"); // the open picker's document-types init is the pre-UTType API
+        // The Type tool's keyboard probe (src/type_probe.rs) exists only beside the default
+        // `aigc` feature, i.e. not in the App Store builds that pass --no-default-features.
+        if std::env::var_os("CARGO_FEATURE_AIGC").is_some() {
+            build.define("PC_TYPE_PROBE", None);
+        }
+        build.compile("pcscenedelegate");
         // The Rust side references the picker's pc_* symbols, but nothing references the scene
         // delegate's ObjC class, so the Apple linker would drop the whole archive as
         // unreferenced; force it in — the class must exist at launch for the Info.plist scene

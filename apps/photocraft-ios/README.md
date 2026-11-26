@@ -113,6 +113,11 @@ a pen on the desktop.
 - **Opens to a white screen on the device and quits at once**: usually the expired signing
   profile — a free profile lasts 7 days, and an expired app is killed the moment it launches.
   Run again from Xcode to re-sign; check Settings › General › VPN & Device Management.
+- **Chinese in a canvas text layer** (development builds only; App Store builds leave these out):
+  `PHOTOCRAFT_TYPE_PROBE=1` starts a Type edit and replays a pinyin keyboard session through the
+  text input view — marked text, commits, backspaces — and `Documents/launch.log` names the layer
+  text after every step (it ends at 中文字体书). `PHOTOCRAFT_FONT_SPECIMEN=1` writes one line of
+  Chinese per embedded CJK family, so a screenshot shows every bundled face drawing.
 - **Anything else**: the build writes a startup trail to `Documents/launch.log`
   (`launched / app created / first frame` — the missing step names where it stopped) and every
   Rust panic with a backtrace to `Documents/crash.log`, both readable over Finder file sharing
