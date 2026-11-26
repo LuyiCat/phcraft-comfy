@@ -124,9 +124,11 @@ fi
 export PHOTOCOMFY_FONTS_REQUIRED=1
 
 VERSION="$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)"
+# Cargo writes the version with three numbers (1.2.0); the release version is two-part (1.2).
+VERSION="${VERSION%.0}"
 [ -n "$VERSION" ] || VERSION="0.0.0"
 # The store build number: raise by one for every release, never reuse or rewind it.
-VERSION_CODE="${VERSION_CODE:-4}"
+VERSION_CODE="${VERSION_CODE:-5}"
 
 echo "building lib${LIB}.so for $TARGET ($PROFILE)…"
 cargo ndk -t "$ABI" -P "$API" build --profile "$PROFILE" -p photocraft-android
@@ -143,11 +145,11 @@ WORK="$REPO/target/android/apk"
 rm -rf "$WORK"
 mkdir -p "$WORK/pkg/lib/$ABI" "$OUT_DIR"
 cp "$SO" "$WORK/pkg/lib/$ABI/"
-"$BT/aapt2" compile --dir "$(dirname "$0")/res" -o "$WORK/resources.zip"
-"$BT/aapt2" link \
 # The licence texts of the fonts embedded in that library (the SIL Open Font License requires
 # them to travel with the font), as APK assets.
 "$REPO/scripts/font-licences.sh" "$WORK/pkg/assets/fonts-licences"
+"$BT/aapt2" compile --dir "$(dirname "$0")/res" -o "$WORK/resources.zip"
+"$BT/aapt2" link \
     -I "$PLATFORM/android.jar" \
     -R "$WORK/resources.zip" \
     --manifest "$(dirname "$0")/AndroidManifest.xml" \

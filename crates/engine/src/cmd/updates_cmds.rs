@@ -79,12 +79,22 @@ pub fn parse_release(bytes: &[u8], current: &str) -> CheckResult {
     if tag.len() > 128 || !tag.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'+')) {
         return Err("Invalid release tag".into());
     }
-    let version = Version::parse(tag.strip_prefix('v').unwrap_or(tag)).map_err(|e| format!("Invalid release version: {e}"))?;
-    let current = Version::parse(current).map_err(|e| format!("Invalid installed version: {e}"))?;
+    let version = parse_version(tag.strip_prefix('v').unwrap_or(tag)).map_err(|e| format!("Invalid release version: {e}"))?;
+    let current = parse_version(current).map_err(|e| format!("Invalid installed version: {e}"))?;
     if !version.pre.is_empty() || !version.cmp_precedence(&current).is_gt() {
         return Ok(None);
     }
     Ok(Some(Release { version: version.to_string(), url: format!("{RELEASES}/tag/{tag}") }))
+}
+
+/// SemVer wants three numbers; this repository's version line is two-part (`1.2`, agent.md §9),
+/// which reads as `1.2.0`.
+fn parse_version(s: &str) -> std::result::Result<Version, semver::Error> {
+    let core = s.split(['-', '+']).next().unwrap_or(s);
+    if core.split('.').count() == 2 && core.bytes().all(|b| b.is_ascii_digit() || b == b'.') {
+        return Version::parse(&format!("{core}.0{}", &s[core.len()..]));
+    }
+    Version::parse(s)
 }
 
 fn empty_params(p: &Value) -> Result<()> {

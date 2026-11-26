@@ -1,6 +1,6 @@
 name: Release
 
-# Tag-driven releases (agent.md › 基于 tag 的发布流程): pushing an annotated `vX.Y.Z` tag
+# Tag-driven releases (agent.md › 基于 tag 的发布流程): pushing an annotated `vX.Y` tag
 # builds every platform and assembles one draft GitHub Release with a SHA256SUMS.txt over all
 # assets; the Android APK rides the same `release-*` artifact pattern as the desktop builds.
 on:
@@ -120,6 +120,8 @@ jobs:
         id: version
         run: |
           VERSION="$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)"
+          # Cargo writes the version with three numbers (1.2.0); the release version is two-part (1.2).
+          VERSION="${VERSION%.0}"
           test -n "$VERSION"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 

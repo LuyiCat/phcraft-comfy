@@ -130,8 +130,8 @@
 				"$(SRCROOT)/PCDocumentPicker.m",
 				"$(SRCROOT)/PCTextInput.m",
 				"$(SRCROOT)/PhotoComfy/Info.plist",
-			);
 				"$(SRCROOT)/../../../photocomfy-fonts/fonts/manifest.txt",
+			);
 			name = "Build the PhotoComfy binary with Cargo";
 			outputPaths = (
 				"$(DERIVED_FILE_DIR)/photocomfy.stamp",
@@ -206,7 +206,7 @@
 				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 9;
 				DEVELOPMENT_TEAM = V9F6BSTSND;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = PhotoComfy/Info.plist;
@@ -215,7 +215,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.2;
 				PHOTOCOMFY_DISABLE_AIGC = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = photoComfy;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -235,7 +235,7 @@
 				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 9;
 				DEVELOPMENT_TEAM = V9F6BSTSND;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = PhotoComfy/Info.plist;
@@ -244,7 +244,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.2;
 				PHOTOCOMFY_DISABLE_AIGC = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = photoComfy;
 				PRODUCT_NAME = "$(TARGET_NAME)";

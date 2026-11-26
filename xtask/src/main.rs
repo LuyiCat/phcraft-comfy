@@ -48,7 +48,7 @@ commands:
                   check perf/budgets.toml and perf/baseline.json (non-zero on a broken budget or regression)
   scorecard [--check]
                   regenerate docs/scorecard.md (--check: fail if it is stale)
-  version [set X.Y.Z[-pre]]
+  version [set X.Y[-pre]]
                   print the workspace version, or set it (Cargo.toml + Cargo.lock)
   ico <out.ico> <in.png>...
                   pack square PNGs (<= 256 px) into a Windows .ico (see packaging/icons.sh)

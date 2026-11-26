@@ -207,7 +207,7 @@ fix(android): restore gallery thumbnail loading
 fix(engine): validate generated image dimensions
 refactor(mobile): share touch gesture handling
 build(macos): update bundled document types
-build(release): bump all platforms to 1.0.4
+build(release): bump all platforms to 1.5
 docs: describe the single-main workflow
 ```
 
@@ -344,23 +344,23 @@ git log --oneline origin/main..HEAD
 
 ## 9. 统一版本号规范
 
-- 所有平台共用同一条 Semantic Versioning 版本线：`主版本.次版本.修订号`。
-- Git tag 统一使用 `vX.Y.Z` 格式，例如：
+- 所有平台共用同一条版本线，统一使用两段式 `主版本.次版本`（`1.1`、`1.2`、`1.3` 这种写法），与 App Store Connect 中的版本号写法一致。
+- Git tag 统一使用 `vX.Y` 格式，例如：
 
 ```text
-v1.0.3
-v1.0.4
-v1.1.0
-v2.0.0
+v1.1
+v1.2
+v1.3
+v2.0
 ```
 
-- 所有发布 tag 都只能使用上述格式，不使用平台前缀、产品前缀、日期、构建号或其他后缀。
-- 禁止 `ios-v1.0.3`、`android-v1.0.3`、`macos-v1.0.3`、`release-1.0.3`、`v1.0.3-build4` 等命名。
-- `v` 只出现在 Git tag 和展示标签中；`Cargo.toml`、iOS `MARKETING_VERSION`、Android `versionName` 等版本字段使用不带 `v` 的 `1.0.3`。
-- 主版本号：不兼容变更；次版本号：向后兼容的新功能；修订号：向后兼容的缺陷修复。
+- 所有发布 tag 都只能使用上述格式，不使用平台前缀、产品前缀、日期、构建号、修订号或其他后缀。
+- 禁止 `ios-v1.2`、`android-v1.2`、`macos-v1.2`、`release-1.2`、`v1.2-build9`、`v1.2.1` 等命名。
+- `v` 只出现在 Git tag 和展示标签中；iOS `MARKETING_VERSION`、Android `versionName` 等版本字段使用不带 `v` 的 `1.2`。例外是根 `Cargo.toml`：Cargo 强制包版本写成三段，因此写作 `1.2.0`（末位固定为 0，`cargo xtask version set 1.2` 会自动补上）；读取它的脚本把结尾的 `.0` 去掉再当作发布版本。
+- 主版本号：不兼容变更；次版本号：其余每一次发布（新功能或缺陷修复）至少递增一次。
+- 历史 tag `v1.1.0`、`v1.1.1` 保持不动；自 `v1.2` 起一律两段式。新版本不得低于任何平台已经发布的最高版本（`1.1.1` 之后是 `1.2`）。
 - 各平台统一版本号，不因只有一个平台发布产物就创建带平台名称的特殊 tag。
 - iOS `CURRENT_PROJECT_VERSION` 和 Android `versionCode` 是商店构建序号，不属于 Git tag；每次发布必须严格递增，不能复用或回退。
-- 首次统一版本时不得低于任何平台已经发布的最高版本；从该版本之后按变更类型递增。
 - 版本号只在一个明确的版本提交中统一修改，避免功能提交夹带发版变更。
 
 ## 10. 基于 tag 的发布流程
@@ -375,19 +375,19 @@ v2.0.0
   5. 在该提交上创建 annotated tag，例如：
 
      ```sh
-     git tag -a v1.0.3 -m "Release v1.0.3"
+     git tag -a v1.2 -m "Release v1.2"
      ```
 
   6. 经仓库所有者明确同意后推送 tag：
 
      ```sh
-     git push origin v1.0.3
+     git push origin v1.2
      ```
 
   7. 由 tag 或受控的手动工作流构建发布产物。
 - 发布工作流未支持 tag 前，应先调整工作流，不得重新引入长期 `release` 分支作为替代。
 - tag 创建后不得移动、重用或指向另一个提交；版本有误时递增版本并创建新 tag。
-- 已发布版本的问题通过新的 `main` 修复提交和新的修订版本解决，不建立长期 hotfix 分支。
+- 已发布版本的问题通过新的 `main` 修复提交和新的版本（递增次版本号）解决，不建立长期 hotfix 分支。
 - 发布说明必须写明实际构建和验证过的平台；未构建或未验证的平台不得宣称已经发布或通过验证。
 
 ### 10.1 GitHub 仓库与 Android / macOS Releases
@@ -401,7 +401,7 @@ https://github.com/LuyiCat/phcraft-comfy.git
 - `origin` 必须指向上述仓库；使用与其等价的 SSH 地址 `git@github.com:LuyiCat/phcraft-comfy.git` 也可以。不得擅自改指其他仓库或添加新 remote。（GitHub 账号已于 2026-11 从 `huairuiLove` 改名为 `LuyiCat`，仓库不变，旧地址仅作跳转。）
 - Android 和 macOS 均通过 **GitHub Releases** 发布，不要求分别上架 Google Play 或 Mac App Store。
 - GitHub Release 只上传 Android 和 macOS 产物，不上传任何 iOS 产物；iOS 不作为 GitHub Release 发布渠道，一律按第 11 节通过 App Store Connect 分发，不得在 Release 资产中提供 IPA、xcarchive 或其他 iOS 包。
-- 每次发布使用统一的 `vX.Y.Z` annotated tag，并在同一个 GitHub Release 中提供本次实际构建和验证的平台产物。
+- 每次发布使用统一的 `vX.Y` annotated tag，并在同一个 GitHub Release 中提供本次实际构建和验证的平台产物。
 - GitHub Release 只承担构建、托管和下载分发，不能替代 Apple 签名与公证，也不能替代 Google Play 的商店审核。
 
 #### Android 发布要求
@@ -412,7 +412,7 @@ https://github.com/LuyiCat/phcraft-comfy.git
 PhotoComfy-<version>-android-arm64.apk
 ```
 
-- 例如版本 `1.0.4` 对应 `PhotoComfy-1.0.4-android-arm64.apk`，Git tag 为 `v1.0.4`，APK 的 `versionName` 为 `1.0.4`。
+- 例如版本 `1.2` 对应 `PhotoComfy-1.2-android-arm64.apk`，Git tag 为 `v1.2`，APK 的 `versionName` 为 `1.2`。
 - 每次发布必须递增 Android `versionCode`，不得继续固定为 `1`，不得复用或回退。
 - 正式发布必须使用固定、可恢复并妥善备份的 Android release keystore；不得使用每个 checkout 自动生成的本地调试 keystore 签名。
 - release keystore 和密码只能保存在受控的本地环境或 GitHub Secrets 中，不得提交到仓库、日志或 Release 说明。
@@ -428,11 +428,11 @@ PhotoComfy-<version>-android-arm64.apk
 PhotoCraft-<version>-macos-universal.dmg
 ```
 
-- 例如版本 `1.0.4` 对应 `PhotoCraft-1.0.4-macos-universal.dmg`，Git tag 为 `v1.0.4`。
+- 例如版本 `1.2` 对应 `PhotoCraft-1.2-macos-universal.dmg`，Git tag 为 `v1.2`。
 - 正式 macOS 产物必须使用 Apple Developer ID 签名，启用 hardened runtime，完成 Apple notarization，并将公证票据 stapling 到应用和 DMG。
 - 签名证书、Apple ID、app-specific password、Team ID 等凭据只能放在受控的 GitHub Secrets 或发布环境中。
 - 发布前必须验证 DMG、`codesign`、公证票据、Gatekeeper 评估以及安装后的启动；ad-hoc 签名包只能用于本地检查，不得冒充正式发布包。
-- 现有 macOS 发布流程可以继续生成 universal DMG，但触发方式必须迁移为 `vX.Y.Z` tag，不再依赖长期 `release` 分支。
+- 现有 macOS 发布流程可以继续生成 universal DMG，但触发方式必须迁移为 `vX.Y` tag，不再依赖长期 `release` 分支。
 
 #### 统一 GitHub Release 产物与检查
 
@@ -480,12 +480,12 @@ AIGC transport: disabled (explicit override)
 
 ### 11.2 每次更新的版本号要求
 
-- 每次功能更新、修复更新或合规更新后，先递增 `MARKETING_VERSION`，至少递增修订号，再执行上传流程。
+- 每次功能更新、修复更新或合规更新后，先递增 `MARKETING_VERSION`（递增次版本号，例如 `1.1.1` → `1.2`、`1.2` → `1.3`），再执行上传流程。
 - 每次实际上传到 App Store Connect 的构建都必须递增 `CURRENT_PROJECT_VERSION`，包括同一 `MARKETING_VERSION` 下的重新上传。
-- `MARKETING_VERSION` 与 Git tag 使用同一版本线，例如版本字段为 `1.0.4`，tag 为 `v1.0.4`。
+- `MARKETING_VERSION` 与 Git tag 使用同一版本线，例如版本字段为 `1.2`，tag 为 `v1.2`，根 `Cargo.toml` 为 `1.2.0`。
 - `CURRENT_PROJECT_VERSION` 使用正整数，每次加一，不复用、不回退，也不写入 Git tag。
 - 版本修改必须同步所有实际读取该值的位置，包括：
-  - 根 `Cargo.toml` 与必要的 `Cargo.lock`；
+  - 根 `Cargo.toml`（Cargo 要求的三段写法 `1.2.0`）与必要的 `Cargo.lock`；
   - `PhotoComfy.xcodeproj` 中 Debug 和 Release 的 `MARKETING_VERSION`、`CURRENT_PROJECT_VERSION`；
   - `ios/build.sh` 生成独立 Info.plist 时使用的回退版本值。
 - 上传前检查 archive 中的 `CFBundleShortVersionString` 和 `CFBundleVersion`，确认与本次版本提交一致。
@@ -505,7 +505,7 @@ AIGC transport: disabled (explicit override)
 
 8. 上传后继续按既定 App Store Connect 流程提交该无 AIGC 构建供审核，不等待另行提醒，不上传包含 AIGC 的对照包。
 9. 确认 App Store Connect 已接收对应的版本号和构建号，记录上传结果。`Processing` 只表示 Apple 正在处理，不得描述为审核通过。
-10. 推送 `main`，并在同一版本提交上创建和推送 `vX.Y.Z` annotated tag；tag 操作不得替代或中断 App Store Connect 上传。
+10. 推送 `main`，并在同一版本提交上创建和推送 `vX.Y` annotated tag；tag 操作不得替代或中断 App Store Connect 上传。
 
 按照本小节完成的 App Store Connect 例行上传和提交审核属于仓库所有者已授权的固定发布流程，无需每次再次询问。任何绕过 AIGC 禁用、修改签名身份、替换发布账号、覆盖已有构建或变更导出配置的操作不在此授权内。
 
@@ -513,7 +513,7 @@ AIGC transport: disabled (explicit override)
 
 - 签名、导出或上传失败时，先报告真实错误，不得改用包含 AIGC 的构建绕过问题。
 - 已上传但发现 AIGC 未完全移除、版本信息错误或合规点不符时，不得复用该构建提交审核；递增构建号并重新上传无 AIGC 版本。
-- 若错误涉及实际功能或版本内容，按变更类型递增 `MARKETING_VERSION`，使用新的 `vX.Y.Z` tag。
+- 若错误涉及实际功能或版本内容，按第 9 节递增 `MARKETING_VERSION`，使用新的 `vX.Y` tag。
 - 不删除或覆盖 App Store Connect 中已有的构建记录，不宣称 Apple 会批准某个版本；审核结论以 App Store Connect 的实际状态为准。
 
 ## 12. 分支与 worktree 清理

@@ -1,7 +1,9 @@
-//! `cargo xtask version [set X.Y.Z[-pre]]`: the workspace version, the single source of truth.
+//! `cargo xtask version [set X.Y[-pre]]`: the workspace version, the single source of truth.
 //!
 //! The version lives in `[workspace.package] version` in the root `Cargo.toml`; every crate
 //! inherits it with `version.workspace = true`, and the packaging scripts read it from here.
+//! Cargo needs three numbers there (`1.2.0`); the release version is the two-part form of the
+//! same line (`1.2` in tags, `MARKETING_VERSION` and Android `versionName`).
 
 use std::path::Path;
 
@@ -16,8 +18,10 @@ pub fn read(manifest: &str) -> Result<String, String> {
 }
 
 /// `manifest` with the workspace version replaced; everything else is byte-for-byte unchanged.
+/// `new` is the release version, `1.2` or `1.2.3-rc.1`; it is written as Cargo spells it.
 pub fn replace(manifest: &str, new: &str) -> Result<String, String> {
-    validate(new)?;
+    let new = cargo_form(new);
+    validate(&new)?;
     let (idx, _) = find_line(manifest)?;
     let mut out = String::with_capacity(manifest.len() + 8);
     for (i, line) in manifest.split_inclusive('\n').enumerate() {
@@ -37,15 +41,24 @@ pub fn replace(manifest: &str, new: &str) -> Result<String, String> {
     Ok(out)
 }
 
-/// Semver without build metadata: `MAJOR.MINOR.PATCH` plus an optional `-pre.release` tag.
+/// The same version as Cargo requires it: a package `version` has three numbers, so the
+/// two-part release version `1.2` is written `1.2.0` (and `1.2-rc.1` as `1.2.0-rc.1`). The tag,
+/// `MARKETING_VERSION` and Android `versionName` keep the two-part form.
+fn cargo_form(v: &str) -> String {
+    let core = v.split(['-', '+']).next().unwrap_or(v);
+    if core.split('.').count() == 2 { format!("{core}.0{}", &v[core.len()..]) } else { v.to_string() }
+}
+
+/// The version line is two-part, `MAJOR.MINOR` (agent.md §9), plus an optional `-pre.release` tag.
+/// A third number is still accepted, so an older `1.1.1` checkout keeps reading as a version.
 pub fn validate(v: &str) -> Result<(), String> {
-    let bad = || Err(format!("`{v}` is not a version like 1.2.3 or 1.2.3-rc.1"));
+    let bad = || Err(format!("`{v}` is not a version like 1.2, 1.2.3 or 1.2-rc.1"));
     let (core, pre) = match v.split_once('-') {
         Some((c, p)) => (c, Some(p)),
         None => (v, None),
     };
     let nums: Vec<&str> = core.split('.').collect();
-    if nums.len() != 3 || nums.iter().any(|n| n.is_empty() || !n.bytes().all(|b| b.is_ascii_digit()) || (n.len() > 1 && n.starts_with('0'))) {
+    if !(2..=3).contains(&nums.len()) || nums.iter().any(|n| n.is_empty() || !n.bytes().all(|b| b.is_ascii_digit()) || (n.len() > 1 && n.starts_with('0'))) {
         return bad();
     }
     if let Some(p) = pre
@@ -106,7 +119,7 @@ pub fn run(root: &Path, args: &[&str]) -> Result<(), String> {
             println!("version: {old} -> {new}");
             Ok(())
         }
-        _ => Err("usage: cargo xtask version [set X.Y.Z[-pre]]".into()),
+        _ => Err("usage: cargo xtask version [set X.Y[-pre]]".into()),
     }
 }
 
@@ -128,6 +141,9 @@ mod tests {
         assert_eq!(read(&out).unwrap(), "1.2.3-rc.1");
         assert_eq!(out, MANIFEST.replace("version = \"0.1.0\"", "version = \"1.2.3-rc.1\""));
         assert!(out.contains("foo = { version = \"1\" }"));
+        // The two-part release version is written the way Cargo requires.
+        assert_eq!(read(&replace(MANIFEST, "1.2").unwrap()).unwrap(), "1.2.0");
+        assert_eq!(read(&replace(MANIFEST, "1.2-rc.1").unwrap()).unwrap(), "1.2.0-rc.1");
     }
 
     #[test]
@@ -139,10 +155,10 @@ mod tests {
 
     #[test]
     fn validates_versions() {
-        for ok in ["0.1.0", "1.20.300", "1.0.0-rc.1", "1.0.0-alpha", "1.0.0-x-y.2"] {
+        for ok in ["0.1.0", "1.20.300", "1.0.0-rc.1", "1.0.0-alpha", "1.0.0-x-y.2", "1.0", "1.2", "1.2-rc.1"] {
             assert!(validate(ok).is_ok(), "{ok}");
         }
-        for bad in ["1.0", "1.0.0.0", "v1.0.0", "01.0.0", "1.0.0-", "1.0.0-a..b", "1.0.0+meta", "1.a.0", ""] {
+        for bad in ["1.0.0.0", "v1.0.0", "01.0.0", "1.0.0-", "1.0.0-a..b", "1.0.0+meta", "1.a.0", "", "1"] {
             assert!(validate(bad).is_err(), "{bad}");
         }
         assert!(replace(MANIFEST, "nope").is_err());

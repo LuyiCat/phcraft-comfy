@@ -56,6 +56,6 @@
 
 ## 发布与版本
 
-- 三端统一 SemVer 版本线，`vX.Y.Z` annotated tag 发布，详见 `agent.md` §9–§11。
+- 三端统一的两段式版本线（`1.2`），`vX.Y` annotated tag 发布，详见 `agent.md` §9–§11。
 - GitHub Releases 只放 Android APK 与 macOS DMG；iOS 一律走 App Store Connect。
 - Android `versionCode` 每次发布严格递增；iOS `CURRENT_PROJECT_VERSION` 同理。

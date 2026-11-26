@@ -30,7 +30,7 @@
 | iOS / iPadOS | PhotoComfy | App Store Connect | 由仓库维护者通过 Xcode 构建上传，不在 GitHub 分发 |
 | macOS | PhotoCraft | GitHub Releases | `PhotoCraft-<version>-macos-universal.dmg` |
 
-版本线三端统一（SemVer），发布用 `vX.Y.Z` annotated tag；仓库工作流与发布规范见
+版本线三端统一（两段式 `1.2`），发布用 `vX.Y` annotated tag；仓库工作流与发布规范见
 [`agent.md`](agent.md)。
 
 ## 这个仓库做了什么
