@@ -29,7 +29,8 @@ the device idiom UIKit reports — never from the screen's size:
   finger opens the context menu). Moving, cropping, sampling and the Type tools stay every
   pointer's. A mouse, a trackpad and automation draw as before.
 - **iPhone**: nobody draws. The toolbar shows no drawing tool, no tool command selects one, the
-  Select menu and Edit › Fill, Stroke and Content-Aware Fill are greyed out, and the canvas
+  Select menu, Edit › Fill, Stroke and Content-Aware Fill and Layer › New Fill Layer are
+  greyed out, and the canvas
   refuses every such gesture with “Drawing, filling and selecting are not available on this
   device”.
 - **Android** makes no such decision: its shell keeps the shared default, any input.

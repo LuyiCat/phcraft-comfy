@@ -69,10 +69,12 @@ impl DrawPolicy {
     }
 
     /// Whether the menus offer command `id`: under [`Self::None`] no selection, fill or Liquify
-    /// command (Select › All and its menu, Edit › Fill, Stroke and Content-Aware Fill, Liquify).
+    /// command (the Select menu, Edit › Fill, Stroke and Content-Aware Fill, Layer › New Fill
+    /// Layer, Liquify).
     pub fn offers_command(self, id: &str) -> bool {
         self != Self::None
             || !(id.starts_with("select.")
+                || id.starts_with("layer.newFillLayer.")
                 || matches!(
                     id,
                     "edit.fill" | "edit.stroke" | "edit.contentAwareFill" | "filter.liquify" | "tools.increaseBrushHardness" | "tools.decreaseBrushHardness"
@@ -137,6 +139,7 @@ mod tests {
             "edit.fill",
             "edit.stroke",
             "edit.contentAwareFill",
+            "layer.newFillLayer.solidColor",
             "filter.liquify",
         ] {
             assert!(!DrawPolicy::None.offers_command(id), "{id}");

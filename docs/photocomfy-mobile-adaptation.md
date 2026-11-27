@@ -70,7 +70,7 @@
   iOS 外壳为 Pencil 接管指针而合成的那次松开，也被正确算作手指的点击。
 - **`None`（iPhone）下还隐藏与置灰**：工具栏不显示绘制类工具（`panels/toolbar.rs` 的
   `visible_sections`），`tool_memory::select` 拒绝选中它们，`menus/state.rs` 把 `select.*`、
-  `edit.fill`、`edit.stroke`、`edit.contentAwareFill`、`filter.liquify` 置灰；`set_draw_policy`
+  `edit.fill`、`edit.stroke`、`edit.contentAwareFill`、`layer.newFillLayer.*`、`filter.liquify` 置灰；`set_draw_policy`
   会把当前选中的绘制类工具换成移动工具。
 - **手掌不再打断 Pencil**：`PencilOnly` 下，画布的双指仲裁不再因为多出一个触点就取消正在进行的
   笔画（`canvas.rs` 的 `pencil_down`）。

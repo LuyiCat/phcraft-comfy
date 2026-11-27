@@ -203,7 +203,7 @@ fn a_policy_without_drawing_offers_no_drawing_tool_or_command() {
     assert_eq!(a.ui.tool, Tool::Move, "the brush is no tool to leave selected");
     crate::tool_memory::select(&mut a, Tool::Eraser);
     assert_eq!((a.ui.tool, a.ui.status.as_str()), (Tool::Move, NONE_HINT), "and none can be selected");
-    for id in ["select.all", "select.deselect", "select.inverse", "edit.fill", "edit.stroke", "filter.liquify"] {
+    for id in ["select.all", "select.deselect", "select.inverse", "edit.fill", "edit.stroke", "filter.liquify", "layer.newFillLayer.solidColor"] {
         assert!(!crate::menus::is_enabled(&a, id), "{id}: no selection, fill or Liquify command");
     }
     for id in ["file.open", "view.rulers", "edit.undo"] {
