@@ -34,9 +34,9 @@ jobs:
           mkdir -p _site
           cp appstore-assets/privacy-policy.html _site/privacy-policy.html
           cp appstore-assets/support.html _site/support.html
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: _site
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
