@@ -54,6 +54,35 @@
   每帧最多重算一次；避免把 `content_rect × pixels_per_point`（同一 pass 内相差一个缩放代次）
   反馈进系数造成缩放来回抖动或停在错误值。
 
+## 绘制输入控制（iOS 与 Android 严格分开）
+
+规范见 `agent.md` §1.3。实现分成两层，iOS 的规则不会经过共享代码落到 Android：
+
+- **共享层只有与平台无关的策略闸门**：`crates/ui-egui/src/input/draw_policy.rs` 的 `DrawPolicy`
+  有三档——`AnyInput`（任何输入都可以绘画，默认值）、`PencilOnly`（只有上报压力的触点，即 Apple Pencil，
+  能驱动绘制类工具）、`None`（谁都不能绘画）。`Tool::is_drawing` 列出哪些工具算绘制：画笔家族与橡皮擦、
+  修复与仿制、填充与渐变、全部选区工具、钢笔与形状工具、文字蒙版。闸门问在每一个入口上：
+  `canvas/tool_input.rs` 的 `preflight_tool_event`（所有工具，含读原始指针事件的套索）、液化与
+  `dialogs/distort_ui.rs`（内容识别填充、选择并遮住、消失点）、选择并遮住的细化边缘画笔
+  （`canvas/select_mask_view.rs`）。被拒绝时状态栏给出提示。
+- **松手才触发的点击工具**（油漆桶、魔术橡皮擦、魔棒）不经过按下时的闸门：`input/finger.rs` 记下这次
+  按压是不是手指发起的，以及本帧松开的那次按压是不是手指的，`canvas.rs` 据此丢弃手指的点击。
+  iOS 外壳为 Pencil 接管指针而合成的那次松开，也被正确算作手指的点击。
+- **`None`（iPhone）下还隐藏与置灰**：工具栏不显示绘制类工具（`panels/toolbar.rs` 的
+  `visible_sections`），`tool_memory::select` 拒绝选中它们，`menus/state.rs` 把 `select.*`、
+  `edit.fill`、`edit.stroke`、`edit.contentAwareFill`、`filter.liquify` 置灰；`set_draw_policy`
+  会把当前选中的绘制类工具换成移动工具。
+- **手掌不再打断 Pencil**：`PencilOnly` 下，画布的双指仲裁不再因为多出一个触点就取消正在进行的
+  笔画（`canvas.rs` 的 `pencil_down`）。
+- **共享代码里原先唯一的 iOS 专判已删除**：`stylus::finger_blocks_object_selection` 的
+  `cfg!(target_os = "ios")`，对象选择现在由同一套策略闸门管。
+- **iOS 外壳自己决定策略**（`apps/photocraft-ios/src/drawing.rs`）：`device_policy()` 用 UIKit 的
+  `userInterfaceIdiom` 判断 iPad（`PencilOnly`）或 iPhone（`None`），不看屏幕尺寸。
+  `PencilPointer` 在 `raw_input_hook` 里重写 egui-winit 的事件流：手指占着模拟指针时 Pencil 落下，
+  就结束手指在画布上的按压并由外壳自己写 Pencil 的指针事件；被系统取消的画布按压会被释放。
+  `long_press.rs`（仅 iOS 这一份）让 Pencil 不触发长按菜单。
+- **Android 不接入**：`apps/photocraft-android` 没有任何对应代码，策略保持默认的 `AnyInput`。
+
 ## 发布与版本
 
 - 三端统一的两段式版本线（`1.2`），`vX.Y` annotated tag 发布，详见 `agent.md` §9–§11。

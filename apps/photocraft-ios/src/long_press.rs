@@ -4,6 +4,12 @@
 //! press+release pair is injected at the touch position and every existing right-click menu in
 //! the app opens unchanged. The finger's own events are swallowed from then until it lifts, so
 //! its release cannot click through the menu that just opened.
+//!
+//! The pencil holds no menu (drawing.rs): a pencil landing ends a finger's hold, and no finger
+//! holds one while a pencil is down, or a line paused for a moment would open a menu and the
+//! resting hand would open one mid-stroke. On iOS a finger's contact never carries a force (no
+//! iPad senses one) and the Apple Pencil's always does. The Android shell keeps the twin of this
+//! file without that rule.
 
 use std::time::Duration;
 
@@ -26,6 +32,8 @@ pub struct LongPress {
     swallow: Option<TouchId>,
     /// Touches currently down; two at once is a gesture, never a hold.
     down: u8,
+    /// The pencil's contacts that are down.
+    pencils: Vec<TouchId>,
 }
 
 impl LongPress {
@@ -39,38 +47,52 @@ impl LongPress {
         let mut lifted: Option<TouchId> = None;
         events.retain(|event| {
             match event {
-                Event::Touch { id, phase, pos, .. } => match phase {
-                    TouchPhase::Start => {
-                        self.down = self.down.saturating_add(1);
-                        // Exactly one finger down and no menu open: watch it. Anything else
-                        // (a second finger joining) makes this a gesture, not a hold.
-                        if self.down == 1 && self.held.is_none() && self.swallow.is_none() {
-                            self.held = Some((*id, *pos, now.unwrap_or(f64::NAN)));
-                        } else {
-                            self.held = None;
+                Event::Touch { id, phase, pos, force, .. } => {
+                    if force.is_some() {
+                        // The pencil draws and never holds a menu; its landing ends a finger's hold.
+                        match phase {
+                            TouchPhase::Start => {
+                                self.pencils.push(*id);
+                                self.held = None;
+                            }
+                            TouchPhase::End | TouchPhase::Cancel => self.pencils.retain(|p| p != id),
+                            TouchPhase::Move => {}
                         }
-                        self.swallow != Some(*id)
+                        return self.swallow != Some(*id);
                     }
-                    TouchPhase::Move => {
-                        if let Some((hid, start, _)) = self.held
-                            && hid == *id
-                            && start.distance(*pos) > SLOP
-                        {
-                            self.held = None; // it became a drag or a pan
+                    match phase {
+                        TouchPhase::Start => {
+                            self.down = self.down.saturating_add(1);
+                            // Exactly one finger down, no pencil and no menu open: watch it. Anything
+                            // else (a second finger joining) makes this a gesture, not a hold.
+                            if self.down == 1 && self.pencils.is_empty() && self.held.is_none() && self.swallow.is_none() {
+                                self.held = Some((*id, *pos, now.unwrap_or(f64::NAN)));
+                            } else {
+                                self.held = None;
+                            }
+                            self.swallow != Some(*id)
                         }
-                        self.swallow != Some(*id)
+                        TouchPhase::Move => {
+                            if let Some((hid, start, _)) = self.held
+                                && hid == *id
+                                && start.distance(*pos) > SLOP
+                            {
+                                self.held = None; // it became a drag or a pan
+                            }
+                            self.swallow != Some(*id)
+                        }
+                        TouchPhase::End | TouchPhase::Cancel => {
+                            self.down = self.down.saturating_sub(1);
+                            if self.swallow == Some(*id) {
+                                lifted = Some(*id); // the finger behind the menu has lifted
+                            }
+                            if matches!(self.held, Some((hid, _, _)) if hid == *id) {
+                                self.held = None; // lifted too soon
+                            }
+                            self.swallow != Some(*id)
+                        }
                     }
-                    TouchPhase::End | TouchPhase::Cancel => {
-                        self.down = self.down.saturating_sub(1);
-                        if self.swallow == Some(*id) {
-                            lifted = Some(*id); // the finger behind the menu has lifted
-                        }
-                        if matches!(self.held, Some((hid, _, _)) if hid == *id) {
-                            self.held = None; // lifted too soon
-                        }
-                        self.swallow != Some(*id)
-                    }
-                },
+                }
                 // The pointer events egui synthesized from the swallowed finger (moves, and the
                 // release) would click through the menu that just opened under it.
                 Event::PointerButton { .. } | Event::PointerMoved(_) | Event::PointerGone => self.swallow.is_none(),
@@ -88,6 +110,7 @@ impl LongPress {
         };
         if let Some((id, start, t0)) = self.held
             && self.down == 1
+            && self.pencils.is_empty()
             && t0.is_finite()
             && now - t0 >= HOLD.as_secs_f64()
         {
@@ -246,5 +269,46 @@ mod tests {
         assert!(close_enough(lp.fires_within(Some(1.0)), Some(Duration::from_millis(500))));
         assert!(close_enough(lp.fires_within(Some(1.4)), Some(Duration::from_millis(100))));
         assert_eq!(lp.fires_within(None), None);
+    }
+    /// The pencil holds no menu: a pencil landing ends a finger's hold, a pencil alone never
+    /// holds, and the resting hand holds nothing while the pencil draws.
+    #[test]
+    fn the_pencil_holds_no_menu() {
+        let at = Pos2::new(10.0, 10.0);
+        let pencil = |phase| Event::Touch { device_id: egui::TouchDeviceId(1), id: TouchId(9), phase, pos: at, force: Some(0.3) };
+        // A pencil held still for a second.
+        let mut lp = LongPress::default();
+        let mut events = vec![pencil(TouchPhase::Start)];
+        lp.frame(&mut events, Some(1.0));
+        assert_eq!(events.len(), 1, "the pencil passes through");
+        let mut events = Vec::new();
+        lp.frame(&mut events, Some(2.0));
+        assert!(events.is_empty(), "a held pencil opens no menu");
+        let mut events = vec![pencil(TouchPhase::End)];
+        lp.frame(&mut events, Some(2.1));
+        assert_eq!(events.len(), 1);
+
+        // A finger is holding; the pencil lands before the deadline.
+        let mut lp = LongPress::default();
+        let mut events = vec![touch(7, TouchPhase::Start, at)];
+        lp.frame(&mut events, Some(1.0));
+        let mut events = vec![pencil(TouchPhase::Start)];
+        lp.frame(&mut events, Some(1.3));
+        let mut events = Vec::new();
+        lp.frame(&mut events, Some(2.0));
+        assert!(events.is_empty(), "the pencil's landing ended the hold");
+
+        // The pencil draws; the resting hand lands and stays.
+        let mut lp = LongPress::default();
+        let mut events = vec![pencil(TouchPhase::Start)];
+        lp.frame(&mut events, Some(1.0));
+        let mut events = vec![touch(7, TouchPhase::Start, Pos2::new(200.0, 200.0))];
+        lp.frame(&mut events, Some(1.2));
+        let mut events = Vec::new();
+        lp.frame(&mut events, Some(2.0));
+        assert!(events.is_empty(), "the resting hand opens no menu mid-stroke");
+        let mut events = vec![pencil(TouchPhase::End)];
+        lp.frame(&mut events, Some(2.5));
+        assert_eq!(events.len(), 1, "the pencil's lift passes");
     }
 }

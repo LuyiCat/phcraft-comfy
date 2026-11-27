@@ -1,7 +1,8 @@
 //! The iPad shell: the same ui-egui app on Metal. winit's iOS backend delivers touches as egui
 //! input (Apple Pencil force included), the canvas and tools work unchanged; platform services
 //! the OS doesn't give an iPad app (desktop file dialogs, the clipboard bridge, crash recovery)
-//! stay unset and the shell degrades gracefully, as in the browser.
+//! stay unset and the shell degrades gracefully, as in the browser. iOS alone decides who may
+//! draw, fill and select (drawing.rs): the Apple Pencil alone on the iPad, nobody on the iPhone.
 
 use std::path::{Path, PathBuf};
 
@@ -20,12 +21,16 @@ use photocraft_ui_egui::{FileDialogAnswer, FileDialogRequest, FileStamp, Photocr
 // Unconditional: the services() below references it on every host (clippy, tests); the
 // extern "C" pc_* symbols only link on iOS, where the ObjC file is compiled in.
 mod clipboard;
+mod drawing;
 #[cfg(target_os = "ios")]
 mod ime;
 mod long_press;
 mod picker;
 // Development builds only (the `aigc` feature App Store uploads leave out): replays a keyboard
-// session and draws a font specimen where no finger can reach.
+// session and draws a font specimen where no finger can reach, and replays finger and pencil
+// touches on the canvas.
+#[cfg(all(target_os = "ios", feature = "aigc"))]
+mod draw_probe;
 #[cfg(all(target_os = "ios", feature = "aigc"))]
 mod type_probe;
 // Feature-gated with the Image API transport: App Store Review builds pass
@@ -255,6 +260,16 @@ struct IosShell {
     frames: u32,
     /// Long-press → the synthesized right-click that opens the context menus (long_press.rs).
     long_press: long_press::LongPress,
+    /// The pencil's pointer where only the pencil draws (drawing.rs).
+    #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+    pencil: drawing::PencilPointer,
+    /// `PHOTOCRAFT_DRAW_PROBE`'s replayed touches (draw_probe.rs).
+    #[cfg(all(target_os = "ios", feature = "aigc"))]
+    probe: Option<draw_probe::Probe>,
+    /// Whether that aid is on: it needs a frame every step of the way, and an idle home screen
+    /// draws none.
+    #[cfg(all(target_os = "ios", feature = "aigc"))]
+    probe_on: bool,
 }
 
 impl IosShell {
@@ -271,6 +286,9 @@ impl IosShell {
         // reach the system pasteboard, which egui-winit cannot do on iOS.
         cc.egui_ctx.add_plugin(photocraft_ui_egui::system_clipboard::CopySync::new(clipboard::bridge()));
         let mut app = PhotocraftApp::new(photocraft_engine::Session::new(), services());
+        // Who may draw, fill and select here is iOS's one decision (drawing.rs): the Apple Pencil
+        // alone on the iPad, nobody on the iPhone. Android makes no such decision.
+        app.set_draw_policy(drawing::device_policy());
         // Projects the user keeps in Files › On My iPad › PhotoComfy list as recent files at
         // launch: a save an older build wrote there reopens from Recent without picking it again.
         // Newest first through `push_recent`, which also caps the list per the preferences.
@@ -338,7 +356,16 @@ impl IosShell {
             app.set_wgpu(rs);
             app.start_compositor(&cc.egui_ctx);
         }
-        Self { app, frames: 0, long_press: long_press::LongPress::default() }
+        Self {
+            app,
+            frames: 0,
+            long_press: long_press::LongPress::default(),
+            pencil: drawing::PencilPointer::default(),
+            #[cfg(all(target_os = "ios", feature = "aigc"))]
+            probe: None,
+            #[cfg(all(target_os = "ios", feature = "aigc"))]
+            probe_on: std::env::var_os("PHOTOCRAFT_DRAW_PROBE").is_some(),
+        }
     }
 }
 
@@ -352,6 +379,23 @@ impl eframe::App for IosShell {
         repair_missing_screen_rect(raw_input);
         #[cfg(target_os = "ios")]
         ime::drain(raw_input);
+        // Development builds: `PHOTOCRAFT_DRAW_PROBE` replays finger and pencil touches here, as
+        // egui-winit delivers them (draw_probe.rs).
+        #[cfg(all(target_os = "ios", feature = "aigc"))]
+        if self.probe_on {
+            draw_probe::inject(&mut self.app, self.frames, &mut self.probe, raw_input);
+        }
+        // The iPad's drawing policy (drawing.rs): where only the pencil draws it owns the pointer,
+        // so a finger holding it first — the resting hand — neither keeps the pencil from a stroke
+        // nor moves it.
+        #[cfg(target_os = "ios")]
+        {
+            use photocraft_ui_egui::draw_policy::DrawPolicy;
+            let pencil_only = self.app.draw_policy == DrawPolicy::PencilOnly && self.app.ui.tool.is_drawing();
+            let canvas = self.app.last_canvas_rect;
+            let on_canvas = |p: egui::Pos2| canvas.contains(p) && ctx.layer_id_at(p).is_none_or(|l| l.order == egui::Order::Background);
+            self.pencil.frame(&mut raw_input.events, pencil_only, &on_canvas);
+        }
         // A finger held still for half a second is the touch right-click: synthesize it, and
         // swallow the finger's own events until it lifts so the release cannot click through
         // the menu that opened (long_press.rs).
@@ -448,6 +492,11 @@ impl eframe::App for IosShell {
         }
         self.app.logic_frame(ctx, frame);
         self.app.finish_type_reset_logic(ctx);
+        // A replayed touch generates no event of its own: keep the frames coming (draw_probe.rs).
+        #[cfg(all(target_os = "ios", feature = "aigc"))]
+        if self.probe_on {
+            ctx.request_repaint();
+        }
         // Testing aid: replay a pinyin keyboard session through the text input view (type_probe.rs).
         #[cfg(all(target_os = "ios", feature = "aigc"))]
         if std::env::var_os("PHOTOCRAFT_TYPE_PROBE").is_some() {

@@ -53,13 +53,15 @@ ureq = { version = "3.5", optional = true, default-features = false, features = 
 
 [target.'cfg(target_os = "ios")'.dependencies]
 # The system locale, for the interface language and the CJK script default (`PHOTOCRAFT_LOCALE`;
-# crates/text `cjk.rs`). The same safe objc2 stack the egui-winit fork uses. Pinned exactly to
-# match the rest of the objc2 code: review the diff before bumping.
+# crates/text `cjk.rs`), and the device idiom (UIDevice), which alone decides the drawing policy
+# (src/drawing.rs): the iPad's Apple Pencil alone, nobody on the iPhone. The same safe objc2
+# stack the egui-winit fork uses. Pinned exactly to match the rest of the objc2 code: review
+# the diff before bumping.
 objc2 = "=0.6.5"
 objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSLocale", "NSString"] }
 # Idle-timer disable: a painting app keeps the display on while in front (the OS auto-locks an
 # idle iPad after two minutes, which read as the screen "going black"). Safe UIKit calls only.
-objc2-ui-kit = { version = "=0.3.2", default-features = false, features = ["std", "UIApplication", "UIScreen", "UIScene", "UISceneDefinitions", "UIView", "UIWindowScene", "UIPasteboard"] }
+objc2-ui-kit = { version = "=0.3.2", default-features = false, features = ["std", "UIApplication", "UIDevice", "UIScreen", "UIScene", "UISceneDefinitions", "UIView", "UIWindowScene", "UIPasteboard"] }
 
 [build-dependencies]
 # Compiles the ObjC scene delegate (ios/PCSceneDelegate.m) into the binary on iOS targets.

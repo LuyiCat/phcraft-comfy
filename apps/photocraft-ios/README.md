@@ -8,12 +8,39 @@ needed; the binary is the app bundle's `CFBundleExecutable`.
 Touch input is egui input: winit's iOS backend delivers taps (and Apple Pencil force, as
 `Force::Calibrated`) as egui `Touch`/pointer events, `input/stylus.rs` feeds the pressure, and
 `touch_twins` de-duplicates double-delivered taps in `raw_input_hook`. Two fingers pan and pinch
-the canvas and stand the tool down (Photoshop on iPad). The interface runs in Preferences ›
+the canvas (Photoshop on iPad); one finger draws nothing — see Drawing input below. The interface
+runs in Preferences ›
 Interface › Touch Interface (on by default on iPadOS): magnified targets, always-visible scroll
 bars, and the safe area respected at the screen edges. Services the OS doesn't provide an iPad
 app (desktop file dialogs, the clipboard bridge, crash recovery) stay unset and the shell
 degrades gracefully, as in the browser; preferences persist in the app container's
 `Application Support/PhotoComfy` directory.
+
+## Drawing input
+
+Who may draw, fill and select is iOS's one decision (`src/drawing.rs`, agent.md §1.3), taken from
+the device idiom UIKit reports — never from the screen's size:
+
+- **iPad**: the Apple Pencil alone drives every drawing tool — the brush family and erasers,
+  retouching, the fills, the selection tools, the Pen and shape tools, the Type Masks — and the
+  painting gestures of the workspaces (Liquify, Content-Aware Fill, Select and Mask, Vanishing
+  Point). A finger never does: the canvas refuses its press with “Painting needs the Apple Pencil”
+  and keeps the finger for the interface and for navigation (two fingers pan and pinch, a held
+  finger opens the context menu). Moving, cropping, sampling and the Type tools stay every
+  pointer's. A mouse, a trackpad and automation draw as before.
+- **iPhone**: nobody draws. The toolbar shows no drawing tool, no tool command selects one, the
+  Select menu and Edit › Fill, Stroke and Content-Aware Fill are greyed out, and the canvas
+  refuses every such gesture with “Drawing, filling and selecting are not available on this
+  device”.
+- **Android** makes no such decision: its shell keeps the shared default, any input.
+
+The shared crate holds only the platform-neutral gate (`crates/ui-egui/src/input/draw_policy.rs`,
+set with `PhotocraftApp::set_draw_policy`); there is no platform test in the drawing logic itself.
+On the iPad the pencil also owns the pointer (`PencilPointer`): egui-winit emulates it from the
+first touch that starts, so a finger holding it — the resting hand — would keep the pencil from a
+stroke. The shell ends a finger's canvas press when the pencil lands, writes the pencil's pointer
+events itself while egui-winit writes none, and a finger joining mid-stroke stands nothing down.
+The pencil holds no context menu (`long_press.rs`), and a canvas press iPadOS cancels is released.
 
 ## Fonts
 
@@ -118,6 +145,13 @@ a pen on the desktop.
   text input view — marked text, commits, backspaces — and `Documents/launch.log` names the layer
   text after every step (it ends at 中文字体书). `PHOTOCRAFT_FONT_SPECIMEN=1` writes one line of
   Chinese per embedded CJK family, so a screenshot shows every bundled face drawing.
+- **A finger draws, or the pencil does not** (development builds only): `PHOTOCRAFT_DRAW_PROBE=1`
+  replays finger and pencil touches on the canvas exactly as egui-winit delivers them — a finger
+  drag, a pencil drag, a finger holding the pointer when the pencil lands, the resting hand
+  joining a stroke, a marquee and a fill — and `Documents/launch.log` says after each what it
+  committed and whether that is what the device's policy expects. Every line should end in “as
+  expected”: a finger commits nothing on the iPad, the pencil's strokes survive the hand, and on
+  the iPhone nothing commits at all.
 - **Anything else**: the build writes a startup trail to `Documents/launch.log`
   (`launched / app created / first frame` — the missing step names where it stopped) and every
   Rust panic with a backtrace to `Documents/crash.log`, both readable over Finder file sharing

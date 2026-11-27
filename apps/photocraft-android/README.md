@@ -116,6 +116,13 @@ downloads into the ignored `photocomfy-fonts/`, checked against `scripts/photoco
 and sets `PHOTOCOMFY_FONTS_DIR`. The licence texts of every embedded font ship inside the APK as
 `assets/fonts-licences/`.
 
+## Drawing input
+
+Android makes no decision about who may draw: the shell leaves the shared default, so a finger, a
+stylus and a mouse all paint, fill and select as before, and this file's `long_press.rs` twin holds
+its menu for a stylus too. The pencil-only iPad and the iPhone without drawing are iOS's rules
+alone (`apps/photocraft-ios/src/drawing.rs`, agent.md §1.3); nothing of them runs here.
+
 The build also compiles `android/res` with aapt2: the manifest's launcher icon uses the
 mobile design from `assets/app-icon/photocomfy-mobile.svg`. Android 8+ uses adaptive
 background/foreground layers, preserving the mark under round and rounded-square masks.
