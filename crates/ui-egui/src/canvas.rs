@@ -883,11 +883,16 @@ fn handle_primary_canvas_input(app: &mut PhotocraftApp, ui: &mut egui::Ui, view:
     // (Preferences › Tools, `paint_mouse`).
     crate::paint_mouse::sync_tool_brush(app);
     let mut buttons = crate::paint_mouse::canvas_buttons(app, response, tool);
-    // iOS: Object Selection is pen-only — a finger's touch (a contact without a force; the
-    // pencil's always carries one) never starts or commits a selection. Fingers keep the mode
-    // HUD, the canvas menus and the two-finger pan; every other platform is unaffected.
-    if crate::stylus::finger_blocks_object_selection(cfg!(target_os = "ios"), tool, app.stylus.finger_down()) {
-        buttons = crate::paint_mouse::Buttons::default();
+    // A finger's press ends here (input/finger.rs): the click egui reports on that release is the
+    // finger's too, and the click tools (the Paint Bucket, the Magic Eraser, the wand) run on it,
+    // after the finger lifted and whatever press began in the same frame. Where a finger may not
+    // draw with `tool` (input/draw_policy.rs), the click is dropped with the policy's hint.
+    if app.fingers.finger_released()
+        && buttons.clicked
+        && let Some(why) = app.draw_policy.refusal(tool, true)
+    {
+        buttons.clicked = false;
+        app.ui.status = tl!(why.hint()).into();
     }
     // The Crop tool's frame is edited from the press (before egui's drag threshold), so the
     // pixels past the canvas show at once, as in Photoshop.
@@ -1068,8 +1073,11 @@ fn handle_canvas_tool_stroke(
     // Touch arbitration (Photoshop on iPad): while two or more fingers are down, the canvas
     // navigates (the pan above) and the tool stands down. A gesture the second finger lands in
     // the middle of is cancelled whole, and the phantom tap of the last finger lifting is
-    // swallowed for a moment. One finger, a pencil, and the mouse are unaffected.
-    let multi_touch = ui.input(|i| i.multi_touch().map(|m| m.num_touches).unwrap_or(1)) >= 2;
+    // swallowed for a moment. One finger, a pencil, and the mouse are unaffected. Where only the
+    // pencil draws (`DrawPolicy::PencilOnly`), a finger is no drawing input at all: one that
+    // lands while the pencil is down is the resting hand, and it stands nothing down.
+    let pencil_down = app.pen_zoom_disabled && !app.draw_policy.finger_joins_pencil_stand_down();
+    let multi_touch = !pencil_down && ui.input(|i| i.multi_touch().map(|m| m.num_touches).unwrap_or(1)) >= 2;
     let arb_id = egui::Id::unique(("pc-touch-arb", input.idx));
     let now_s = ui.input(|i| i.time);
     let (was_multi, mut suppress_until) = ctx.data(|d| d.get_temp::<(bool, f64)>(arb_id)).unwrap_or((false, 0.0));

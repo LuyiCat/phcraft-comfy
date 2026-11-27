@@ -310,6 +310,20 @@ pub fn menu(app: &mut PhotocraftApp, ctx: &egui::Context, id: &str, params: &Val
 /// Pointer events (document coordinates) while a mode is active. True when consumed.
 pub fn pointer(app: &mut PhotocraftApp, ev: ToolEvent, mods: egui::Modifiers) -> bool {
     cancel_stale(app);
+    // The workspaces whose canvas gestures paint or select — Content-Aware Fill's sampling brush
+    // and lasso, Select and Mask's Quick Selection, Refine Edge Brush and lassos, the Vanishing
+    // Point tools — follow the shell's drawing policy like the tools do (Liquify checks its own,
+    // input/draw_policy.rs): where only the pencil draws, a finger's press starts none of them.
+    let paints = app.distort.caf.is_some()
+        || app.distort.select_mask.as_ref().is_some_and(|w| on_doc(app, w.document))
+        || app.distort.vanishing.as_ref().is_some_and(|v| on_doc(app, v.document));
+    if paints
+        && matches!(ev, ToolEvent::Down { .. })
+        && let Some(why) = app.draw_policy.painting_refusal(app.fingers.pointer_is_finger())
+    {
+        app.ui.status = tl!(why.hint()).into();
+        return true;
+    }
     if app.distort.caf.is_some() {
         crate::caf_ui::pointer(app, ev, mods);
         return true;

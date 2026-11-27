@@ -9,6 +9,11 @@ pub fn is_enabled(app: &PhotocraftApp, id: &str) -> bool {
     if crate::tool_shortcuts::tool(id).is_some() {
         return true;
     }
+    // A shell without drawing (`DrawPolicy::None`, input/draw_policy.rs) offers no selection, fill
+    // or Liquify command. Selecting all text is the Type tool's own, not a selection.
+    if !app.draw_policy.offers_command(id) && !(id == "select.all" && app.ui.text_edit.is_some()) {
+        return false;
+    }
     if id == "ui.symmetryTransform" {
         return crate::symmetry_ui::can_transform(app);
     }

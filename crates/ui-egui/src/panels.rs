@@ -1348,15 +1348,32 @@ mod toolbar_hidden_tests {
 
     #[test]
     fn a_slot_keeps_only_its_visible_tools_and_its_index() {
-        let sections = visible_sections(&["Sponge".to_string(), "Move".to_string(), "Artboard".to_string()]);
+        let sections = visible_sections(&["Sponge".to_string(), "Move".to_string(), "Artboard".to_string()], Default::default());
         assert_eq!(sections.len(), TOOL_SECTIONS.len() - 1, "the Move section has no tools left");
         let index = TOOL_SECTIONS.iter().flat_map(|section| section.iter()).position(|slot| slot.contains(&Tool::Sponge)).unwrap();
         let slot = sections.iter().flatten().find(|(i, _)| *i == index).map(|(_, tools)| tools.clone());
         assert_eq!(slot, Some(vec![Tool::Dodge, Tool::Burn]));
         assert!(sections.iter().flatten().all(|(_, tools)| !tools.contains(&Tool::Move) && !tools.contains(&Tool::Sponge)));
-        assert_eq!(visible_sections(&[]).iter().map(Vec::len).sum::<usize>(), TOOL_SECTIONS.iter().map(|section| section.len()).sum::<usize>());
-        let by_command = visible_sections(&["sponge".to_string(), "move".to_string(), "artboard".to_string()]);
+        assert_eq!(
+            visible_sections(&[], Default::default()).iter().map(Vec::len).sum::<usize>(),
+            TOOL_SECTIONS.iter().map(|section| section.len()).sum::<usize>()
+        );
+        let by_command = visible_sections(&["sponge".to_string(), "move".to_string(), "artboard".to_string()], Default::default());
         assert_eq!(by_command, sections, "edit.toolbar names are read like `ui.set {{tool}}` names");
+    }
+
+    /// The shell's drawing policy hides what it does not offer, and Edit › Toolbar cannot bring
+    /// it back (`DrawPolicy::None`, the iPhone: no drawing tool at all).
+    #[test]
+    fn a_device_without_drawing_shows_no_drawing_tool() {
+        let shown =
+            |policy: crate::draw_policy::DrawPolicy| visible_sections(&[], policy).into_iter().flatten().flat_map(|(_, tools)| tools).collect::<Vec<Tool>>();
+        let none = shown(crate::draw_policy::DrawPolicy::None);
+        assert!(none.iter().all(|tool| !tool.is_drawing()), "no drawing tool");
+        for tool in [Tool::Move, Tool::Hand, Tool::Zoom, Tool::Crop, Tool::Type, Tool::Eyedropper] {
+            assert!(none.contains(&tool), "{tool:?} stays");
+        }
+        assert_eq!(shown(crate::draw_policy::DrawPolicy::PencilOnly), shown(Default::default()), "pencil-only offers every tool");
     }
 }
 

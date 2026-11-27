@@ -218,7 +218,7 @@ impl PhotocraftApp {
             stylus: Default::default(),
             fingers: Default::default(),
             two_finger_swipe: Default::default(),
-            pen_only_painting: false,
+            draw_policy: Default::default(),
             pen_zoom_disabled: false,
             control_click: Default::default(),
             background_jobs: false,
@@ -239,6 +239,15 @@ impl PhotocraftApp {
         // File › Scripts › Script Events Manager: "Start Application".
         photocraft_engine::automate_cmds::fire_event(&mut app.session, "startApplication");
         app
+    }
+
+    /// Sets the shell's drawing policy ([`crate::input::draw_policy`]): who may draw, fill and
+    /// select. A policy without drawing leaves no drawing tool selected, since none could be used.
+    pub fn set_draw_policy(&mut self, policy: super::input::draw_policy::DrawPolicy) {
+        self.draw_policy = policy;
+        if !policy.offers(self.ui.tool) {
+            tool_memory::select(self, Tool::Move);
+        }
     }
 }
 

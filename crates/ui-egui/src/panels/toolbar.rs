@@ -58,18 +58,20 @@ pub(crate) fn toolbar_position(tool: Tool) -> usize {
 }
 
 /// [`TOOL_SECTIONS`] without the tools hidden in Edit › Toolbar (`hidden` holds tool names: the
-/// dialog writes `Tool` debug names, `edit.toolbar` takes any name `Tool::from_name` reads). A
-/// slot keeps only its visible tools, so its flyout lists just those; a slot with none left is
-/// dropped, and so is a section with no slots. Each slot carries its index in `TOOL_SECTIONS`,
-/// so its remembered tool and flyout stay put when other slots are hidden.
-pub(super) fn visible_sections(hidden: &[String]) -> Vec<Vec<(usize, Vec<Tool>)>> {
+/// dialog writes `Tool` debug names, `edit.toolbar` takes any name `Tool::from_name` reads), nor
+/// the tools the shell's drawing policy does not offer (`DrawPolicy::offers`: a device without
+/// drawing shows no drawing tool, and that dialog cannot bring one back). A slot keeps only its
+/// visible tools, so its flyout lists just those; a slot with none left is dropped, and so is a
+/// section with no slots. Each slot carries its index in `TOOL_SECTIONS`, so its remembered tool
+/// and flyout stay put when other slots are hidden.
+pub(super) fn visible_sections(hidden: &[String], policy: crate::draw_policy::DrawPolicy) -> Vec<Vec<(usize, Vec<Tool>)>> {
     let hidden: Vec<Tool> = hidden.iter().map(String::as_str).filter_map(Tool::from_name).collect();
     let mut index = 0usize;
     let mut sections = Vec::new();
     for section in TOOL_SECTIONS {
         let mut slots = Vec::new();
         for slot in section.iter() {
-            let tools: Vec<Tool> = slot.iter().copied().filter(|tool| !hidden.contains(tool)).collect();
+            let tools: Vec<Tool> = slot.iter().copied().filter(|tool| !hidden.contains(tool) && policy.offers(*tool)).collect();
             if !tools.is_empty() {
                 slots.push((index, tools));
             }
@@ -108,7 +110,7 @@ pub fn toolbar(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
     } else {
         (50.0, 36.0, 7i8)
     };
-    let sections = visible_sections(&app.session.prefs().toolbar.hidden);
+    let sections = visible_sections(&app.session.prefs().toolbar.hidden, app.draw_policy);
     // Two columns when the header chevron asks for them; a column that doesn't fit scrolls.
     let double = app.ui.panels.toolbar_double;
     let w = if double { w1 + bx + 2.0 } else { w1 };
@@ -662,7 +664,7 @@ fn toolbar_top(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
         .exact_size(bx + 16.0)
         .frame(egui::Frame::NONE.fill(t.chrome).inner_margin(egui::Margin::symmetric(7, 8)))
         .show(ui, |ui| {
-            let sections = visible_sections(&app.session.prefs().toolbar.hidden);
+            let sections = visible_sections(&app.session.prefs().toolbar.hidden, app.draw_policy);
             let ctx = ui.ctx().clone();
             egui::ScrollArea::horizontal().id_salt("toolbar-strip").auto_shrink([false, true]).show(ui, |ui| {
                 ui.horizontal(|ui| {

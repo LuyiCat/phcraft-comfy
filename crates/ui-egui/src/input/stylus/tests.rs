@@ -452,18 +452,3 @@ fn finger_down_tracks_forceless_contacts_only() {
     s.update(&[t(3, Start, None), t(3, Cancel, None)]);
     assert!(!s.finger_down());
 }
-
-/// The iOS Object Selection gate: only that tool, only a finger, only on iOS.
-#[test]
-fn finger_blocks_object_selection_only_on_ios() {
-    use crate::state::Tool;
-    for (ios, tool, finger, blocked) in [
-        (true, Tool::ObjectSelection, true, true),
-        (true, Tool::ObjectSelection, false, false),
-        (true, Tool::RectMarquee, true, false),
-        (true, Tool::Brush, true, false),
-        (false, Tool::ObjectSelection, true, false),
-    ] {
-        assert_eq!(finger_blocks_object_selection(ios, tool, finger), blocked, "{tool:?} ios={ios} finger={finger}");
-    }
-}

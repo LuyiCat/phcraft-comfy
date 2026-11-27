@@ -3254,3 +3254,5 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
 
 	Multi-Select	多選
 	Select {layer}	選取{layer}
+	Painting needs the Apple Pencil	繪畫、填色和選取範圍需要使用 Apple Pencil
+	Drawing, filling and selecting are not available on this device	此裝置不支援繪畫、填色和選取範圍

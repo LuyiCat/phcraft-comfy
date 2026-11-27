@@ -523,13 +523,5 @@ impl PenContacts {
     }
 }
 
-/// On iOS the Object Selection tool is pen-only: a finger never starts or commits a selection,
-/// it taps the selection-mode HUD and the menus and pans with two fingers, while the Apple
-/// Pencil — whose contacts carry a force, unlike a finger's — selects as a mouse does. `finger`
-/// is [`Stylus::finger_down`]; every other platform passes `false` and is unaffected.
-pub fn finger_blocks_object_selection(ios: bool, tool: crate::state::Tool, finger: bool) -> bool {
-    ios && finger && tool == crate::state::Tool::ObjectSelection
-}
-
 #[cfg(test)]
 mod tests;

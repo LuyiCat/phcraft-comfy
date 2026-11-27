@@ -54,16 +54,14 @@ fn tool_move(app: &mut PhotocraftApp, x: f64, y: f64, pressure: f32, mods: egui:
 }
 
 fn preflight_tool_event(app: &mut PhotocraftApp, ev: ToolEvent, mods: egui::Modifiers) -> Option<(bool, egui::Modifiers)> {
-    // Pen-only painting (the iPad shell): a finger's press (the emulated pointer's contact began
-    // without a force, input/finger.rs) never starts a stroke with a brush-family tool. ⌘ still
-    // moves the layer (event_tool hands the press to the Move tool), every other tool keeps its
-    // touch behaviour, and a mouse, automation and the pencil (a force-reporting contact) paint.
+    // The shell's drawing policy (input/draw_policy.rs) comes first, so nothing a refused press
+    // would start ever begins: where only the pencil draws, a finger (a contact that began
+    // without a force, input/finger.rs) never draws, fills or selects; where nothing draws, no
+    // press does. ⌘ still hands the press to the Move tool, which is no drawing tool.
     if let ToolEvent::Down { .. } = ev
-        && app.pen_only_painting
-        && app.fingers.pointer_is_finger()
-        && event_tool(app, mods).is_brushlike()
+        && let Some(why) = app.draw_policy.refusal(event_tool(app, mods), app.fingers.pointer_is_finger())
     {
-        app.ui.status = tl!("Painting needs the Apple Pencil").into();
+        app.ui.status = tl!(why.hint()).into();
         return None;
     }
     // A press anywhere but on a guide deselects the selected guide (`guide_select`).

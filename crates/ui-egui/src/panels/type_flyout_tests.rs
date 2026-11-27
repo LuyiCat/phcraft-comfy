@@ -454,7 +454,7 @@ fn next_slot_tool_wraps_around_the_flyout() {
 #[test]
 fn visible_sections_drop_hidden_tools_from_alt_click_slots() {
     let hidden = vec!["EllipseMarquee".into(), "SingleRowMarquee".into()];
-    let sections = visible_sections(&hidden);
+    let sections = visible_sections(&hidden, Default::default());
     let marquee = sections
         .iter()
         .flat_map(|s| s.iter())

@@ -23,6 +23,12 @@ pub(crate) type ToolBrushes = (Tool, Vec<(Tool, BrushSettings)>);
 
 /// Explicit choices override temporary pen and held-key tools, even when selecting the same tool.
 pub(crate) fn select(app: &mut PhotocraftApp, tool: Tool) {
+    // A device without drawing (`DrawPolicy::None`) selects no drawing tool, from the toolbar, a
+    // key or the command search alike; the canvas would refuse its every press anyway.
+    if !app.draw_policy.offers(tool) {
+        app.ui.status = tl!(crate::draw_policy::Refusal::NoDrawing.hint()).into();
+        return;
+    }
     app.stylus.tool_before_eraser = None;
     app.ui.spring = None;
     if app.ui.tool == Tool::Frame && tool != Tool::Frame {

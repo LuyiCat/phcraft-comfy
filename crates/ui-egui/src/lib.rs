@@ -194,6 +194,7 @@ pub use dialogs::wide_angle_ui;
 use input::alt_grab;
 use input::blend_keys;
 use input::control_click;
+pub use input::draw_policy;
 pub use input::hold_keys;
 use input::layout_keys;
 pub use input::nudge_bundle;
@@ -731,10 +732,10 @@ pub struct PhotocraftApp {
     /// Which touch contact the emulated pointer press belongs to, and whether it is a finger
     /// (input/finger.rs); updated at the top of `logic_frame`.
     pub(crate) fingers: input::finger::FingerPresses,
-    /// Pen-only painting (the iPad shell turns it on): a finger's press never starts a brush
-    /// stroke or a Liquify push; the pencil, a mouse, automation and every other tool are
-    /// unaffected. Desktop, web and Android leave it off.
-    pub pen_only_painting: bool,
+    /// Who may draw, fill and select on the canvas (input/draw_policy.rs). The shell decides:
+    /// the iPad's Apple Pencil alone and nobody on the iPhone; the default, any input, on Android,
+    /// the desktop and the web.
+    pub draw_policy: input::draw_policy::DrawPolicy,
     /// A pen contact is down this frame: pen input is drawing/editing, so the canvas must not
     /// read it as a pinch, a wheel or the Zoom tool's drag (the mobile navigation policy the
     /// iPad and Android shells share). Set each frame from the stylus contact classifier.
@@ -903,7 +904,7 @@ mod new_layer_button_tests;
 mod layer_tray_ui_tests;
 
 #[cfg(test)]
-mod pen_only_painting_tests;
+mod draw_policy_tests;
 
 #[cfg(test)]
 mod quick_actions_tests;

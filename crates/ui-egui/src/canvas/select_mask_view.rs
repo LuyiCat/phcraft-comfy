@@ -317,6 +317,11 @@ pub fn canvas_brush(app: &mut PhotocraftApp, painter: &egui::Painter, over: egui
     }
     ctx.set_cursor_icon(egui::CursorIcon::None);
     if let Some(at) = press {
+        // The shell's drawing policy (input/draw_policy.rs): this brush paints on the mask.
+        if let Some(why) = app.draw_policy.painting_refusal(app.fingers.pointer_is_finger()) {
+            app.ui.status = tl!(why.hint()).into();
+            return true;
+        }
         paint(&mut d.fields, at, start, subtract);
         ctx.request_repaint();
     }

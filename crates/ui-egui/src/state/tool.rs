@@ -259,6 +259,50 @@ impl Tool {
                 | Tool::Sponge
         )
     }
+    /// The tools that paint, retouch, fill, select or draw vector artwork (the brush family and
+    /// the erasers, the fills, the selection tools, the Pen and shape tools, the Type Masks whose
+    /// text becomes a selection). Only a drawing device may drive them where the shell's policy
+    /// says so (`input/draw_policy.rs`), and a device without drawing offers none of them. Moving,
+    /// viewing, cropping, sampling, type and the analysis tools are not drawing: every pointer
+    /// source keeps those.
+    pub fn is_drawing(self) -> bool {
+        self.is_brushlike()
+            || matches!(
+                self,
+                Tool::MagicEraser
+                    | Tool::RedEye
+                    | Tool::Patch
+                    | Tool::ContentAwareMove
+                    | Tool::Gradient
+                    | Tool::PaintBucket
+                    | Tool::RectMarquee
+                    | Tool::EllipseMarquee
+                    | Tool::SingleRowMarquee
+                    | Tool::SingleColumnMarquee
+                    | Tool::Lasso
+                    | Tool::PolygonLasso
+                    | Tool::MagneticLasso
+                    | Tool::MagicWand
+                    | Tool::QuickSelection
+                    | Tool::ObjectSelection
+                    | Tool::Pen
+                    | Tool::FreeformPen
+                    | Tool::CurvaturePen
+                    | Tool::AddAnchorPoint
+                    | Tool::DeleteAnchorPoint
+                    | Tool::ConvertPoint
+                    | Tool::PathSelection
+                    | Tool::DirectSelection
+                    | Tool::Rectangle
+                    | Tool::EllipseShape
+                    | Tool::Triangle
+                    | Tool::Polygon
+                    | Tool::Line
+                    | Tool::CustomShape
+                    | Tool::HorizontalTypeMask
+                    | Tool::VerticalTypeMask
+            )
+    }
     /// Photoshop default single-key shortcut (`'\0'` = none, e.g. the Blur group).
     pub fn key(self) -> char {
         match self {
