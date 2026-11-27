@@ -513,18 +513,25 @@ AIGC transport: disabled (explicit override)
 6. 在 Xcode 构建日志或 `xcodebuild` 日志、归档内容和签名结果中检查 AIGC 禁用状态、签名及 archive 版本信息；任何一项不符都停止上传并重新构建。
 7. 在 Xcode Organizer 中选择该 archive，通过 **Distribute App ▸ App Store Connect ▸ Upload** 上传；或使用 `xcodebuild -exportArchive` 配合 `ExportOptions.plist`（`destination=upload`）通过命令行上传。不得上传包含 AIGC 的构建。
 
-8. 上传后继续按既定 App Store Connect 流程提交该无 AIGC 构建供审核，不等待另行提醒，不上传包含 AIGC 的对照包。
+8. 上传完成即进入仓库所有者的内测（TestFlight）：仓库所有者由此直接内测，是否以及何时提交审核由仓库所有者内测后决定，不自动提交审核，也不上传包含 AIGC 的对照包。
 9. 确认 App Store Connect 已接收对应的版本号和构建号，记录上传结果。`Processing` 只表示 Apple 正在处理，不得描述为审核通过。
-10. 推送 `main`，并在同一版本提交上创建和推送 `vX.Y` annotated tag；tag 操作不得替代或中断 App Store Connect 上传。
+10. 推送 `main`。只推送 App Store Connect 供内测时到此为止，不创建 tag 或 GitHub Release；需要正式发布（tag、GitHub Release、提交审核）时由仓库所有者另行提出，tag 操作不得替代或中断 App Store Connect 上传。
 
-按照本小节完成的 App Store Connect 例行上传和提交审核属于仓库所有者已授权的固定发布流程，无需每次再次询问。任何绕过 AIGC 禁用、修改签名身份、替换发布账号、覆盖已有构建或变更导出配置的操作不在此授权内。
+按照本小节完成的 App Store Connect 例行上传属于仓库所有者已授权的固定流程，无需每次再次询问；提交审核、创建 tag 和 GitHub Release 不在此授权内，由仓库所有者内测后决定。任何绕过 AIGC 禁用、修改签名身份、替换发布账号、覆盖已有构建或变更导出配置的操作不在此授权内。
 
 ### 11.4 失败与重新上传
 
 - 签名、导出或上传失败时，先报告真实错误，不得改用包含 AIGC 的构建绕过问题。
 - 已上传但发现 AIGC 未完全移除、版本信息错误或合规点不符时，不得复用该构建提交审核；递增构建号并重新上传无 AIGC 版本。
-- 若错误涉及实际功能或版本内容，按第 9 节递增 `MARKETING_VERSION`，使用新的 `vX.Y` tag。
+- 若错误涉及实际功能或版本内容，按第 9 节递增 `MARKETING_VERSION`，使用新的版本号上传。
 - 不删除或覆盖 App Store Connect 中已有的构建记录，不宣称 Apple 会批准某个版本；审核结论以 App Store Connect 的实际状态为准。
+
+### 11.5 更新完成即上传 App Store Connect 供内测
+
+- 仓库所有者的固定要求：任何更新（功能、修复、合规）完成并通过第 7 节的最小必要验证后，直接递增版本号并按第 11.3 节归档上传 App Store Connect，不等待另行指示，也不以“尚未真机验证”为由只停留在 `main`。仓库所有者通过 TestFlight 直接内测，真机验证由内测完成。
+- 版本号依次增加：`MARKETING_VERSION` 按两段式逐次递增（`1.2` → `1.3` → `1.4` …），每次上传 `CURRENT_PROJECT_VERSION` 加一；同一版本号下的重新上传也必须递增构建号。
+- 一次更新对应一次上传：版本提交之后再改了代码，就按下一个版本号重新上传，不覆盖、不复用已上传的构建号。
+- 上传成功即完成本次交付。交付说明仍须写明实际上传的版本号、构建号，以及“已上传不代表通过审核”。
 
 ## 12. 分支与 worktree 清理
 
@@ -555,7 +562,7 @@ AIGC transport: disabled (explicit override)
 - 添加新 remote；
 - 批量删除 worktree、未提交修改、未跟踪文件或本地备份。
 
-第 11 节明确授权的 App Store Connect 例行上传和提交审核除外；该流程直接执行，不逐次询问。除上述情况及既定例外外，按本规范继续完成工作，不因普通实现决策反复询问。
+第 11 节明确授权的 App Store Connect 例行上传除外；该流程直接执行，不逐次询问。提交审核、创建正式发布 tag 和发布 Release 不属于该例外，仍按本节先问人。除上述情况及既定例外外，按本规范继续完成工作，不因普通实现决策反复询问。
 
 ## 15. Agent 交付要求
 
