@@ -54,7 +54,8 @@ BT=~/Library/Android/sdk/build-tools/<最新版>
 按 `agent.md` §1.2，iOS 只在 Xcode 中验证：选择 iPad 模拟器或真机 **Run**，
 需要查看模拟设备窗口时使用 Xcode 自带的 DeviceHub。发版前用
 **Any iOS Device (arm64)** 执行 **Product ▸ Archive**，核对构建日志的
-`AIGC transport: disabled (explicit override)`、归档版本号与签名团队后再上传。
+`AIGC transport: disabled (explicit override)`、归档版本号与签名团队后再上传。上传前用同一个
+无 AIGC 配置在模拟器启动并打开文档，确认底部抽屉没有“生成”按钮、“文件”和“窗口”菜单里没有 ComfyUI 项。
 
 ## 4. 发版冒烟验证
 

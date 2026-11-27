@@ -33,6 +33,9 @@
 - **AIGC 合规**：所有上传 App Store Connect 的构建必须在编译期移除 AIGC
   （`PHOTOCOMFY_DISABLE_AIGC=YES`，构建日志出现 `AIGC transport: disabled (explicit override)`）。
   本地 Debug 构建可以保留，但不得上传。
+  上传构建也不显示任何生成入口：底部抽屉的“生成”按钮、“窗口 › ComfyUI Generation”、“文件”菜单里的
+  ComfyUI 项都不出现，对应命令 id 被拒绝（iOS 外壳调用 `PhotocraftApp::set_generation_removed()`）。
+  Android 外壳接入 Image API transport，保留“生成”面板。
 
 ## 触摸交互（`crates/ui-egui/src/touch.rs` 及手势代码）
 

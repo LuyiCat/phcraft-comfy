@@ -40,20 +40,10 @@ pub fn dock_area(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
 /// bodies are the dock's own (`crate::panels::dock_body`), and the selected tab is remembered
 /// per group like the desktop dock's.
 fn touch_drawer(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
-    use crate::dock::Group;
     let t = Tokens::get(ui.ctx());
     let open = app.touch_drawer;
     let pro = t.pro;
-    let entries: [(Group, &str, &str); 8] = [
-        (Group::Layers, "layers", tl!("Layers")),
-        (Group::Properties, "sliders-horizontal", tl!("Properties")),
-        (Group::Color, "palette", tl!("Color & Swatches")),
-        (Group::Navigator, "navigation", tl!("Navigator")),
-        (Group::History, "clock", tl!("History")),
-        (Group::Brushes, "brush", tl!("Brushes")),
-        (Group::Character, "type", tl!("Character")),
-        (Group::Comfy, "sparkles", tl!("Generate")),
-    ];
+    let entries = drawer_entries(app);
     let bar = 52.0;
     let body = if open.is_some() { (ui.ctx().input(|i| i.content_rect()).height() * 0.4).clamp(220.0, 360.0) } else { 0.0 };
     egui::Panel::bottom("touch_panels")
@@ -92,6 +82,25 @@ fn touch_drawer(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
                 .min_scrolled_height(ui.available_height())
                 .show(ui, |ui| crate::panels::dock_body(app, ui, group, tab));
         });
+}
+
+/// The portrait drawer's buttons, in order: one per panel group. A build without image
+/// generation (crate::generation) shows no Generate button.
+pub(crate) fn drawer_entries(app: &PhotocraftApp) -> Vec<(crate::dock::Group, &'static str, &'static str)> {
+    use crate::dock::Group;
+    [
+        (Group::Layers, "layers", tl!("Layers")),
+        (Group::Properties, "sliders-horizontal", tl!("Properties")),
+        (Group::Color, "palette", tl!("Color & Swatches")),
+        (Group::Navigator, "navigation", tl!("Navigator")),
+        (Group::History, "clock", tl!("History")),
+        (Group::Brushes, "brush", tl!("Brushes")),
+        (Group::Character, "type", tl!("Character")),
+        (Group::Comfy, "sparkles", tl!("Generate")),
+    ]
+    .into_iter()
+    .filter(|(group, _, _)| *group != Group::Comfy || app.generation.offered())
+    .collect()
 }
 
 /// The docking layout's protected canvas panel: the document area, with the icon rail on its end
@@ -193,6 +202,9 @@ pub(crate) fn dock_body(app: &mut PhotocraftApp, ui: &mut egui::Ui, group: crate
         (Group::Layers, 1) => channels(app, ui),
         (Group::Layers, _) => crate::vector_ui::paths_panel(app, ui),
         (Group::Brushes, _) => crate::brushes_tab::show(app, ui),
-        (Group::Comfy, _) => crate::comfy_panel::show(app, ui),
+        // A layout saved with the tab still lists it; a build without image generation leaves
+        // the body empty, since nothing it shows could run.
+        (Group::Comfy, _) if app.generation.offered() => crate::comfy_panel::show(app, ui),
+        (Group::Comfy, _) => {}
     }
 }

@@ -70,7 +70,10 @@ The target's Xcode script phase internally runs `ios/build.sh` as part of the Xc
 Xcode signs the bundle. Both Xcode Debug and Release builds include the Image API integration
 and HEIC/HEIF import. The Release archive therefore carries the same editing and generation
 features. For a build that deliberately omits the Image API transport, set
-`PHOTOCOMFY_DISABLE_AIGC=YES` in the Xcode build settings or scheme. For a real iPad with a free
+`PHOTOCOMFY_DISABLE_AIGC=YES` in the Xcode build settings or scheme. Such a build names no
+generation entry either: the shell calls `PhotocraftApp::set_generation_removed()`
+(`crates/ui-egui/src/generation.rs`), so the drawer's Generate button and the File and Window
+menu items are gone and their command ids are refused. For a real iPad with a free
 Apple ID, set the target's Signing & Capabilities team to your Personal Team, connect the iPad,
 and press Run. The free profile expires after 7 days — press Run again to re-sign.
 

@@ -48,6 +48,11 @@ pub fn invoke(app: &mut PhotocraftApp, ctx: &egui::Context, id: &str, params: Va
     if crate::discard_ui::intercept(app, id, &params) {
         return Ok(Value::Null);
     }
+    // A build without image generation (crate::generation) runs none of its commands, whatever
+    // asks: a shortcut kept from an earlier build, the palette, automation.
+    if !app.generation.offered() && crate::generation::Generation::owns(id) {
+        return Err("image generation is not part of this build".into());
+    }
     let r = invoke_unguarded(app, ctx, id, params)?;
     // The palette's empty-query list (UI-217-7); opening the palette isn't a command to recall.
     if id != "edit.search" {

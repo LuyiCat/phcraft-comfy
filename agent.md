@@ -473,7 +473,7 @@ cargo build --profile release --target aarch64-apple-ios --offline --no-default-
 - “完整移除”至少要求：
   - 不编译 `src/api_gen.rs` 和可选的 Image API 网络 transport；
   - `comfy_transport`、`comfy_image_api`、`comfy_generations_dir` 均处于禁用状态；
-  - 不出现 Generate、ComfyUI、Image API、模型、endpoint、API key 等 AIGC 入口或设置；
+  - 不出现 Generate、ComfyUI、Image API、模型、endpoint、API key 等 AIGC 入口或设置，包括底部抽屉的“生成”按钮、“窗口 › ComfyUI Generation”、“文件”菜单里的 ComfyUI 项，以及搜索面板和快捷键编辑器里的同名命令；上传构建由 iOS 外壳调用 `PhotocraftApp::set_generation_removed()`（`crates/ui-egui/src/generation.rs`）移除；
   - 不读取、展示或使用旧的 Image API 配置，不保留可用的新增生成记录目录；
   - 不存在可触发 AIGC 请求的命令路径、远程开关或隐藏入口；
   - 不发出任何 AIGC 网络请求。
@@ -486,7 +486,7 @@ AIGC transport: disabled (explicit override)
 ```
 
 - 日志显示 `AIGC transport: enabled`、缺少禁用日志或无法确认 feature 时，该 archive 一律禁止上传。
-- 上传前使用同一个无 AIGC 配置启动应用，手工确认生成入口和相关设置不存在，其他编辑、打开和保存功能仍可使用。这里只验证合规点和本次改动，不新增或运行无关测试。
+- 上传前使用同一个无 AIGC 配置启动应用并打开文档，手工确认生成入口和相关设置不存在（底部抽屉没有“生成”按钮，“文件”和“窗口”菜单没有 ComfyUI 项），其他编辑、打开和保存功能仍可使用；`cargo test -p photocraft-ui-egui --lib -- generation_tests` 必须通过。这里只验证合规点和本次改动，不新增或运行无关测试。
 
 ### 11.2 每次更新的版本号要求
 

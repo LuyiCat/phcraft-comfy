@@ -78,6 +78,7 @@ pub use file_open::OsEvent;
 pub use state::{Tool, UiState};
 
 mod app;
+mod generation;
 mod input;
 mod prefs;
 mod services;
@@ -191,6 +192,7 @@ pub use dialogs::targa_options_ui;
 pub use dialogs::tiff_options_ui;
 pub use dialogs::vp_ui;
 pub use dialogs::wide_angle_ui;
+pub use generation::Generation;
 use input::alt_grab;
 use input::blend_keys;
 use input::control_click;
@@ -736,6 +738,9 @@ pub struct PhotocraftApp {
     /// the iPad's Apple Pencil alone and nobody on the iPhone; the default, any input, on Android,
     /// the desktop and the web.
     pub draw_policy: input::draw_policy::DrawPolicy,
+    /// Whether this build offers image generation (generation.rs): the ComfyUI / Image API
+    /// panel, its menu items and its commands. The shell decides, as it does the drawing policy.
+    pub generation: Generation,
     /// A pen contact is down this frame: pen input is drawing/editing, so the canvas must not
     /// read it as a pinch, a wheel or the Zoom tool's drag (the mobile navigation policy the
     /// iPad and Android shells share). Set each frame from the stylus contact classifier.
@@ -806,6 +811,8 @@ mod profile_open_tests;
 #[cfg(test)]
 mod profile_prompt_tests;
 
+#[cfg(test)]
+mod generation_tests;
 #[cfg(test)]
 mod input_tests;
 

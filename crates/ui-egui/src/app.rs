@@ -219,6 +219,7 @@ impl PhotocraftApp {
             fingers: Default::default(),
             two_finger_swipe: Default::default(),
             draw_policy: Default::default(),
+            generation: Default::default(),
             pen_zoom_disabled: false,
             control_click: Default::default(),
             background_jobs: false,
@@ -247,6 +248,17 @@ impl PhotocraftApp {
         self.draw_policy = policy;
         if !policy.offers(self.ui.tool) {
             tool_memory::select(self, Tool::Move);
+        }
+    }
+
+    /// Takes image generation out of this build ([`crate::generation`]). The shell calls it once
+    /// at start when it compiled without the transport; the panel and its drawer close with it,
+    /// since no entry that reopens them remains.
+    pub fn set_generation_removed(&mut self) {
+        self.generation = super::generation::Generation::Removed;
+        self.ui.panels.comfy = false;
+        if self.touch_drawer == Some(crate::dock::Group::Comfy) {
+            self.touch_drawer = None;
         }
     }
 }

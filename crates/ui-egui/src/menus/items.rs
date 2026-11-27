@@ -225,6 +225,11 @@ pub fn menu_items(app: &PhotocraftApp) -> Vec<MenuItem> {
     if !prefs.menus.hidden.is_empty() {
         items.retain(|i| !prefs.menus.is_hidden(&i.id));
     }
+    // A build without image generation (crate::generation) lists none of its commands, here or
+    // wherever this list feeds: the bar, the palette, the shortcut editor.
+    if !app.generation.offered() {
+        items.retain(|i| !crate::generation::Generation::owns(&i.id));
+    }
     if prefs.interface.show_menu_colors {
         for it in &mut items {
             it.color = prefs.menus.colors.get(&it.id).cloned();

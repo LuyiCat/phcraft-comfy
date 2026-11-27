@@ -289,6 +289,10 @@ impl IosShell {
         // Who may draw, fill and select here is iOS's one decision (drawing.rs): the Apple Pencil
         // alone on the iPad, nobody on the iPhone. Android makes no such decision.
         app.set_draw_policy(drawing::device_policy());
+        // App Store builds compile without the Image API transport (`aigc` off), so the interface
+        // names no generation entry either: no Generate button, no ComfyUI menu item.
+        #[cfg(not(feature = "aigc"))]
+        app.set_generation_removed();
         // Projects the user keeps in Files › On My iPad › PhotoComfy list as recent files at
         // launch: a save an older build wrote there reopens from Recent without picking it again.
         // Newest first through `push_recent`, which also caps the list per the preferences.
