@@ -212,7 +212,7 @@
 				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 11;
 				DEVELOPMENT_TEAM = V9F6BSTSND;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = PhotoComfy/Info.plist;
@@ -221,7 +221,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.3;
+				MARKETING_VERSION = 1.4;
 				PHOTOCOMFY_DISABLE_AIGC = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = photoComfy;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -241,7 +241,7 @@
 				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 11;
 				DEVELOPMENT_TEAM = V9F6BSTSND;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = PhotoComfy/Info.plist;
@@ -250,7 +250,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.3;
+				MARKETING_VERSION = 1.4;
 				PHOTOCOMFY_DISABLE_AIGC = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = photoComfy;
 				PRODUCT_NAME = "$(TARGET_NAME)";
