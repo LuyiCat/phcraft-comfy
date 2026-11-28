@@ -38,6 +38,12 @@
 - Android 端不做上述任何特殊处理：手指照常绘画、填充和选择，Android 外壳不接入这套策略，其代码也不随 iOS 的绘制控制改动。
 - 修改任一端的绘制控制后，必须验证本端在模拟器或真机上的行为（iOS 用 `PHOTOCRAFT_DRAW_PROBE=1` 回放手指与 Pencil 触摸，并运行 `cargo test -p photocraft-ios`），同时用共享层定向测试（`cargo test -p photocraft-ui-egui --lib -- draw_policy input::finger`）确认默认策略下任何输入照常绘画，即另一端行为未变。
 
+### 1.4 中文字体必须在字体菜单里可直接辨认
+
+- 仓库所有者的要求是能在字体选项里找到并使用中文字体，不只是字体被编进包里。中文界面下，Type 工具及其他位置的字体菜单必须：在最近使用的字体之后列出“中文字体”分组；分组里的字体以界面语言的名字显示（字体自带的中文名，或字体包清单 `name` 行给出的名字）；覆盖中文的字体在样张栏显示中文样张。日文、韩文界面同理；英文等非 CJK 界面的菜单保持原样。
+- 改动字体菜单、字体包或字体嵌入方式后，必须在模拟器或真机上实际点开字体菜单确认分组、名字和样张，并选一个中文字体输入中文；不能只凭渲染样张或单元测试宣称完成。没有辅助功能权限时，用一个独立的 XCUITest（`XCUIApplication(bundleIdentifier:)` 加坐标点击）驱动模拟器。
+- 主机验证（需嵌入字体包）：`CRAFT_FONTS_DIR=$PWD/craft-fonts PHOTOCOMFY_FONTS_DIR=$PWD/photocomfy-fonts cargo test -p photocraft-ui-egui --lib -- font_picker_tests:: font_preview`，以及 `cargo test -p photocraft-text --lib -- native_family_names a_native_name_follows`。详见 `docs/photocomfy-fonts.md`。
+
 ## 2. Git 核心原则
 
 - `main` 是唯一的长期分支，也是远程仓库的默认分支。

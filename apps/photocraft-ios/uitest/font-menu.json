@@ -1,0 +1,10 @@
+[
+  {"sleep": 3},
+  {"reveal": {"label": "横排文字工具", "swipe": [290, 112, 50, 112]}, "sleep": 1},
+  {"label": "横排文字工具", "sleep": 2},
+  {"label": "字体", "sleep": 3, "shot": "01-menu-top"},
+  {"tap": [400, 344], "sleep": 2, "shot": "02-picked-deyi"},
+  {"tap": [300, 600], "sleep": 3},
+  {"type": "得意黑的中文样张", "sleep": 2, "shot": "03-typed-in-deyi"},
+  {"label": "字体", "sleep": 3, "shot": "04-menu-again"}
+]
