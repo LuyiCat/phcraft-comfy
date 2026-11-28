@@ -815,6 +815,8 @@ mod profile_prompt_tests;
 mod generation_tests;
 #[cfg(test)]
 mod input_tests;
+#[cfg(test)]
+mod type_touch_tests;
 
 #[cfg(test)]
 mod empty_workspace_tests;

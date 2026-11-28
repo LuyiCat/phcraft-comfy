@@ -21,6 +21,10 @@
 //! manifest format: with `PHOTOCOMFY_FONTS_DIR=<pack dir>` its faces join `CRAFT_FONTS` after the
 //! craft fonts. The iOS and Android build scripts set it (and `PHOTOCOMFY_FONTS_REQUIRED=1`, which
 //! turns a missing or bad pack into an error); desktop and web builds leave it unset.
+//!
+//! A manifest row may end with a ninth field, `lang=name;lang=name`: the family's name in each of
+//! those languages for font menus (`CraftFont::names`). The pack's script writes it for families
+//! whose own `name` table has no such record; craft-fonts rows have eight fields.
 use std::fmt::Write as _;
 use std::path::PathBuf;
 
@@ -60,6 +64,24 @@ fn embed_manifest(dir_var: &str, required_var: &str, what: &str, wasm: bool, src
     }
 }
 
+/// The `lang=name;lang=name` field of a manifest row, absent or empty in most, as the elements of
+/// `CraftFont::names`.
+fn display_names(field: Option<&str>, line: &str) -> Result<Vec<String>, String> {
+    let Some(field) = field.map(str::trim).filter(|f| !f.is_empty()) else { return Ok(Vec::new()) };
+    field
+        .split(';')
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .map(|pair| {
+            let (lang, name) = pair
+                .split_once('=')
+                .filter(|(l, n)| !l.trim().is_empty() && !n.trim().is_empty())
+                .ok_or_else(|| format!("malformed display name `{pair}` in manifest line: {line}"))?;
+            Ok(format!("({:?}, {:?})", lang.trim(), name.trim()))
+        })
+        .collect()
+}
+
 /// Deflate the bundled fonts into `OUT_DIR/fonts/` (`fonts::BUNDLED` includes them).
 fn deflate_bundled_fonts() {
     use std::io::Write as _;
@@ -92,14 +114,16 @@ fn craft_fonts(dir: &std::path::Path) -> Result<String, String> {
         let [family, style, file, scripts, ..] = f.as_slice() else {
             return Err(format!("malformed manifest line: {line}"));
         };
+        let names = display_names(f.get(8).copied(), line)?;
         let path = dir.join(file).canonicalize().map_err(|e| format!("{file}: {e}"))?;
         println!("cargo::rerun-if-changed={}", path.display());
         let scripts: Vec<String> = scripts.split(',').map(|s| format!("{:?}", s.trim())).collect();
         let _ = writeln!(
             out,
-            "    CraftFont {{ family: {family:?}, style: {style:?}, scripts: &[{}], bytes: include_bytes!({:?}) }},",
+            "    CraftFont {{ family: {family:?}, style: {style:?}, scripts: &[{}], bytes: include_bytes!({:?}), names: &[{}] }},",
             scripts.join(", "),
             path.display().to_string(),
+            names.join(", "),
         );
     }
     Ok(out)

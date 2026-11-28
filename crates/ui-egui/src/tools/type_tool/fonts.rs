@@ -25,6 +25,92 @@ pub fn families() -> Arc<Vec<String>> {
     v
 }
 
+use photocraft_text::cjk::CjkScript;
+
+/// The interface's own CJK script, when its language is Japanese, Korean or Chinese.
+pub(crate) fn ui_cjk_script() -> Option<CjkScript> {
+    photocraft_text::cjk::locale_script(Some(crate::i18n::current().code()))
+}
+
+/// The characters an installed font must show to count as a font of `script`.
+fn script_core(script: CjkScript) -> &'static [char] {
+    match script {
+        CjkScript::SimplifiedChinese => &['汉', '字', '体', '简'],
+        CjkScript::TraditionalChinese => &['漢', '字', '體', '繁'],
+        CjkScript::Japanese => &['あ', 'ア', '漢'],
+        CjkScript::Korean => &['한', '글'],
+    }
+}
+
+/// The ISO 15924 code an embedded font's manifest declares for `script`.
+fn manifest_script(script: CjkScript) -> &'static str {
+    match script {
+        CjkScript::SimplifiedChinese => "Hans",
+        CjkScript::TraditionalChinese => "Hant",
+        CjkScript::Japanese => "Jpan",
+        CjkScript::Korean => "Hang",
+    }
+}
+
+/// Whether `family` can show the interface's own script: an embedded font goes by the scripts its
+/// manifest declares, an installed one by covering the script's own characters.
+fn shows_script(engine: &mut photocraft_text::TextEngine, family: &str, script: CjkScript) -> bool {
+    if let Some(font) = photocraft_text::CRAFT_FONTS.iter().find(|f| f.family == family) {
+        return font.scripts.contains(&manifest_script(script));
+    }
+    let chars = engine.fonts.charmap(family, 400, false);
+    script_core(script).iter().all(|c| chars.binary_search(c).is_ok())
+}
+
+/// The families that can show the interface's own script: the embedded ones in their manifest's
+/// order (the PhotoComfy font pack lists its body faces first), then the installed ones
+/// alphabetically. Under a Chinese, Japanese or Korean interface the font menu heads its list with
+/// them, where they would otherwise be a few names among hundreds of Latin ones; under an interface
+/// in another script there is no such group. Cached until the shared engine registers fonts, the
+/// served catalog changes or the interface language does.
+pub(crate) fn script_families() -> Option<Arc<Vec<String>>> {
+    let script = ui_cjk_script()?;
+    type Cached = ((u64, u64, CjkScript), Arc<Vec<String>>);
+    static SCRIPT: std::sync::Mutex<Option<Cached>> = std::sync::Mutex::new(None);
+    let key = (photocraft_text::fonts::shared_generation(), photocraft_text::served::generation(), script);
+    let mut cached = SCRIPT.lock().unwrap_or_else(PoisonError::into_inner);
+    if let Some((k, v)) = cached.as_ref()
+        && *k == key
+    {
+        return Some(v.clone());
+    }
+    let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
+    let mut v: Vec<String> = photocraft_text::CRAFT_FONTS
+        .iter()
+        .filter(|f| f.scripts.contains(&manifest_script(script)) && seen.insert(f.family))
+        .map(|f| f.family.to_string())
+        .collect();
+    let all = families();
+    let mut engine = photocraft_text::shared().lock().unwrap_or_else(PoisonError::into_inner);
+    v.extend(all.iter().filter(|f| !seen.contains(f.as_str()) && shows_script(&mut engine, f, script)).cloned());
+    let v = Arc::new(v);
+    *cached = Some((key, v.clone()));
+    Some(v)
+}
+
+/// The families' names in the interface's language (`FontDb::native_family_names`), for the font
+/// menu's script group. Cached until the shared engine registers fonts or the language changes.
+pub(super) fn native_families() -> Arc<HashMap<String, String>> {
+    type Cached = ((u64, String), Arc<HashMap<String, String>>);
+    static NATIVE: std::sync::Mutex<Option<Cached>> = std::sync::Mutex::new(None);
+    let code = crate::i18n::current().code().to_string();
+    let key = (photocraft_text::fonts::shared_generation(), code.clone());
+    let mut cached = NATIVE.lock().unwrap_or_else(PoisonError::into_inner);
+    if let Some((k, v)) = cached.as_ref()
+        && *k == key
+    {
+        return v.clone();
+    }
+    let v = Arc::new(photocraft_text::shared().lock().map(|mut e| e.fonts.native_family_names(&code)).unwrap_or_default());
+    *cached = Some((key, v.clone()));
+    v
+}
+
 /// Where [`sync_font_names`] leaves the font menus' localized labels for this frame.
 pub(super) fn font_labels_id() -> egui::Id {
     egui::Id::unique("photocraft-font-menu-localized-names")
@@ -61,32 +147,43 @@ fn localized_families() -> Arc<HashMap<String, String>> {
 }
 
 /// The font menu's rows: each family with the label it shows (its localized name when `labels`
-/// has one, else the family), matching `query` (lowercase) by either name. With localized labels
-/// the rows sort by label, so the menu stays alphabetical as shown. As in Photoshop, recently
-/// used families also head the menu in their own group, most recent first (Preferences ▸ Type ▸
-/// Recent Fonts), and keep their alphabetical place below it; a query shows each match once.
-/// Returns the rows and how many of them form the recent group.
+/// has one, else the family), matching `query` (lowercase) by any of its names. With localized
+/// labels the rows sort by label, so the menu stays alphabetical as shown. As in Photoshop,
+/// recently used families also head the menu in their own group, most recent first (Preferences ›
+/// Type › Recent Fonts), and keep their alphabetical place below it. With no query, the families
+/// of `script` ([`script_families`]) follow in their own group, in that order. In both groups a
+/// family goes by its name in the interface's language (`native`) where it has one; a query shows
+/// each match once. Returns the rows and how many of them form the recent and the script groups.
 pub(super) fn font_menu_rows<'a>(
     families: &'a [String],
     labels: Option<&'a HashMap<String, String>>,
+    native: Option<&'a HashMap<String, String>>,
+    script: &'a [String],
     query: &str,
     recents: &[String],
-) -> (Vec<(&'a String, &'a str)>, usize) {
+) -> (Vec<(&'a String, &'a str)>, usize, usize) {
     let label = |f: &'a String| labels.and_then(|l| l.get(f)).map_or(f.as_str(), String::as_str);
+    let own = |f: &'a String| native.and_then(|n| n.get(f)).map_or(label(f), String::as_str);
     let mut rows: Vec<(&String, &str)> = families
         .iter()
         .map(|f| (f, label(f)))
-        .filter(|(f, l)| query.is_empty() || f.to_lowercase().contains(query) || l.to_lowercase().contains(query))
+        .filter(|(f, l)| query.is_empty() || f.to_lowercase().contains(query) || l.to_lowercase().contains(query) || own(f).to_lowercase().contains(query))
         .collect();
     if labels.is_some_and(|l| !l.is_empty()) {
         rows.sort_by_cached_key(|(_, l)| l.to_lowercase());
     }
     if !query.is_empty() {
-        return (rows, 0);
+        return (rows, 0, 0);
     }
-    let recent: Vec<(&String, &str)> = recents.iter().filter_map(|r| rows.iter().find(|(f, _)| *f == r).copied()).collect();
-    let n = recent.len();
-    (recent.into_iter().chain(rows).collect(), n)
+    let recent: Vec<(&String, &str)> = recents.iter().filter_map(|r| rows.iter().find(|(f, _)| *f == r).map(|(f, _)| (*f, own(f)))).collect();
+    let group: Vec<(&String, &str)> = script
+        .iter()
+        .filter_map(|s| rows.iter().find(|(f, _)| *f == s).map(|(f, _)| (*f, own(f))))
+        .filter(|(f, _)| !recent.iter().any(|(r, _)| r == f))
+        .collect();
+    let n_recent = recent.len();
+    let n_script = group.len();
+    (recent.into_iter().chain(group).chain(rows).collect(), n_recent, n_script)
 }
 
 fn weight_name(w: f32) -> &'static str {
@@ -525,8 +622,11 @@ pub(crate) fn family_picker_in(
             crate::font_filters::clear_all(ui, &mut filters);
         });
         let lookup = crate::font_filters::lookup_in(library.traits.clone());
-        // No recent group while a filter is on: the filters narrow the alphabetical list alone.
-        let (mut rows, n_recent) = font_menu_rows(families, labels, &edit.query, if filters.any() { &[] } else { &edit.recents });
+        // No recent or script group while a filter is on: the filters narrow the alphabetical list alone.
+        let script = if filters.any() { Arc::default() } else { script_families().unwrap_or_default() };
+        let native = (!script.is_empty()).then(native_families);
+        let (mut rows, n_recent, n_script) =
+            font_menu_rows(families, labels, native.as_deref(), &script, &edit.query, if filters.any() { &[] } else { &edit.recents });
         // Show Similar Fonts compares with the font current when it was turned on (or the menu
         // opened), as the recent group stays put: each arrow step applies a font, and sorting
         // around that one sent the next step back to the font before.
@@ -583,7 +683,10 @@ pub(crate) fn family_picker_in(
         let expanded_id = field.with("expanded");
         let mut expanded: Vec<String> = ui.data(|d| d.get_temp(expanded_id)).unwrap_or_default();
         let mut hovered: Option<String> = None;
-        let reveal = if stepped.is_some() { None } else { reveal };
+        // With the interface's script group listed, the menu opens at its top whatever the current
+        // family, which the name field shows anyway: the group is what the menu is opened for.
+        let open_at_top = revealing && n_script > 0 && stepped.is_none();
+        let reveal = if stepped.is_some() || open_at_top { None } else { reveal };
         let mut reveal_top: Option<egui::Rect> = None;
         ui.separator();
         // The line between the class list and the font list. A separator in the row would take
@@ -610,9 +713,7 @@ pub(crate) fn family_picker_in(
             let shown = list.show(ui, |ui| {
                 ui.vertical(|ui| {
                     ui.set_width(FONT_LIST_WIDTH);
-                    let weak = |ui: &mut egui::Ui, text: &str| {
-                        ui.label(egui::RichText::new(text).weak());
-                    };
+                    let weak = |ui: &mut egui::Ui, text: &str| -> egui::Response { ui.label(egui::RichText::new(text).weak()) };
                     if filters.similar && !comparable {
                         weak(ui, tl!("No similar fonts: the current font doesn't say what it looks like."));
                     }
@@ -628,17 +729,34 @@ pub(crate) fn family_picker_in(
                             },
                         );
                     }
-                    // The first `n_recent` rows are the recent group, above a line (`font_menu_rows`).
+                    // The first `n_recent` rows are the recent group and the next `n_script` the interface's own script group, each above a line and the second under its title (`font_menu_rows`).
+                    let script_title = (n_script > 0).then(|| {
+                        match ui_cjk_script() {
+                            Some(CjkScript::Japanese) => tl!("Japanese fonts"),
+                            Some(CjkScript::Korean) => tl!("Korean fonts"),
+                            Some(CjkScript::SimplifiedChinese | CjkScript::TraditionalChinese) | None => tl!("Chinese fonts"),
+                        }
+                        .to_string()
+                    });
                     for (i, &(f, shown)) in rows.iter().enumerate() {
                         let recent_row = i < n_recent;
-                        if i == n_recent && n_recent > 0 {
+                        let script_row = i >= n_recent && i < n_recent + n_script;
+                        if (i == n_recent && n_recent > 0) || (i == n_recent + n_script && n_script > 0) {
                             ui.separator();
+                        }
+                        // Opened with the group listed, the view starts at the top of the list: the first
+                        // row when a recent group leads, else the group's own title.
+                        if i == n_recent && n_script > 0 {
+                            let title = weak(ui, script_title.as_deref().unwrap_or_default());
+                            if open_at_top && n_recent == 0 {
+                                title.scroll_to_me(Some(egui::Align::Min));
+                            }
                         }
                         // Only rows on screen read their font's format and styles, and an expanded
                         // family: its style rows stay listed when its own row scrolls out of view.
                         let visible = ui.is_rect_visible(egui::Rect::from_min_size(ui.cursor().min, egui::vec2(FONT_LIST_WIDTH, row_h)));
                         let format = if visible { lookup(f).map(|t| t.format) } else { None };
-                        let open = !recent_row && expanded.contains(f);
+                        let open = !recent_row && !script_row && expanded.contains(f);
                         let styles = if visible || open { library.styles_of(f) } else { Vec::new() };
                         let favorite = library.favorites.contains(f);
                         // Highlighted by its fill alone, as Photoshop's font menu is: a hovered or selected
@@ -647,8 +765,7 @@ pub(crate) fn family_picker_in(
                         // One row lit, though a recent family is listed twice.
                         let mut button = egui::Button::selectable(selected == Some(i), shown).truncate().stroke(egui::Stroke::NONE);
                         let [_, h] = preview.map_or([0.0, 16.0], |(_, b)| b);
-                        button =
-                            button.right_text(egui::Atom::custom(egui::IdSalt::new(("font-sample", f, recent_row)), egui::vec2(slot + FONT_BADGE_WIDTH, h)));
+                        button = button.right_text(egui::Atom::custom(egui::IdSalt::new(("font-sample", f, i)), egui::vec2(slot + FONT_BADGE_WIDTH, h)));
                         let response = ui
                             .allocate_ui_with_layout(egui::vec2(FONT_LIST_WIDTH, row_h), egui::Layout::left_to_right(egui::Align::Center), |ui| {
                                 ui.spacing_mut().item_spacing.x = 2.0;
@@ -658,7 +775,7 @@ pub(crate) fn family_picker_in(
                                     library.toggled = Some(f.clone());
                                 }
                                 // A family with several styles expands to list them (">").
-                                if styles.len() > 1 && !recent_row {
+                                if styles.len() > 1 && !recent_row && !script_row {
                                     let (icon, tip) = if open { ("chevron-down", tl!("Hide Styles")) } else { ("chevron-right", tl!("Show Styles")) };
                                     if crate::icons::button(ui, icon, 16.0, false, tip).clicked() {
                                         if open {
@@ -675,6 +792,8 @@ pub(crate) fn family_picker_in(
                             .inner;
                         if stepped == Some(i) {
                             response.scroll_to_me(Some(egui::Align::Center));
+                        } else if open_at_top && n_recent > 0 && i == 0 {
+                            response.scroll_to_me(Some(egui::Align::Min));
                         } else if reveal.is_some() {
                             if reveal_from == Some(i) {
                                 reveal_top = Some(response.rect);
@@ -703,7 +822,7 @@ pub(crate) fn family_picker_in(
                             let t = crate::theme::Tokens::get(ui.ctx());
                             ui.painter().text(center, egui::Align2::CENTER_CENTER, format.badge(), egui::FontId::proportional(10.0), t.text_dim);
                             let tip = egui::Rect::from_center_size(center, egui::vec2(FONT_BADGE_WIDTH, 14.0));
-                            ui.interact(tip, ui.scope_id().with(("font-format", f, recent_row)), egui::Sense::hover())
+                            ui.interact(tip, ui.scope_id().with(("font-format", f, i)), egui::Sense::hover())
                                 .on_hover_text(crate::font_filters::format_tip(format));
                         }
                         if response.hovered() {
@@ -790,7 +909,7 @@ pub(crate) fn family_picker_in(
         }
         let notches = notches + crate::widgets::wheel_notches_of(ui, field.with("family-wheel"), hovered, 1.0);
         // Closed-field navigation stays alphabetical, independent of recent picks (#3350, #7407).
-        let (rows, _) = font_menu_rows(families, labels, "", &[]);
+        let (rows, _, _) = font_menu_rows(families, labels, None, &[], "", &[]);
         if let Some(i) = rows.iter().position(|(f, _)| *f == current)
             && let Some(n) = wheel_family_index(i, rows.len(), notches)
             && let Some((f, _)) = rows.get(n)

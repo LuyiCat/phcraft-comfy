@@ -116,6 +116,10 @@
 			buildActionMask = 2147483647;
 			files = (
 			);
+			// Cargo decides what to rebuild: its inputs are the whole workspace, far more than
+			// `inputPaths` could list. Skipped for an unchanged list, this phase left the target
+			// without the Rust binary (Xcode's link step had replaced it with an empty one).
+			alwaysOutOfDate = 1;
 			inputPaths = (
 				"$(SRCROOT)/build.sh",
 				"$(SRCROOT)/../../../Cargo.toml",

@@ -4270,3 +4270,8 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
 	Pick a different document for each channel.	チャンネルごとに別のドキュメントを選択してください。
 	A picked document is no longer open.	選択したドキュメントの一つが開かれていません。
 	A picked document is no longer a grayscale document of the same size.	選択したドキュメントの一つが、同じサイズのグレースケールのドキュメントではなくなりました。
+
+# The font menu's group of the interface's own script (type_tool/fonts.rs).
+	Chinese fonts	中国語フォント
+	Japanese fonts	日本語フォント
+	Korean fonts	韓国語フォント

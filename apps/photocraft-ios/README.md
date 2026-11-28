@@ -57,6 +57,8 @@ Zhuque Fangsong, Yozai, the ZCOOL faces and the handwriting faces — that `ios/
 fonts. The pack is not in git: the first build that needs it runs `scripts/photocomfy-fonts.sh` (about 190 MB of
 downloads into the ignored `photocomfy-fonts/`, checked against `scripts/photocomfy-fonts.lock`), then sets
 `PHOTOCOMFY_FONTS_DIR`. The licence texts of every embedded font ship inside the bundle as `Licences/`.
+Under a Chinese interface the font menu heads its list with a 中文字体 group that names these families in
+Chinese and shows a Chinese sample beside each, so they read as Chinese fonts rather than as more Latin ones.
 
 ## Build and run
 
@@ -67,7 +69,9 @@ iPhone/iPad), then press **Run**. Do not invoke `ios/build.sh`, Cargo iOS target
 is not visible, open Xcode's DeviceHub.
 
 The target's Xcode script phase internally runs `ios/build.sh` as part of the Xcode build and
-Xcode signs the bundle. Both Xcode Debug and Release builds include the Image API integration
+Xcode signs the bundle. The phase is marked to run on every build (`alwaysOutOfDate`): Cargo decides
+what to rebuild from the whole workspace, which `inputPaths` cannot list, and a skipped phase left the
+bundle with Xcode's empty binary in place of the Rust one after an edit to a shared crate. Both Xcode Debug and Release builds include the Image API integration
 and HEIC/HEIF import. The Release archive therefore carries the same editing and generation
 features. For a build that deliberately omits the Image API transport, set
 `PHOTOCOMFY_DISABLE_AIGC=YES` in the Xcode build settings or scheme. Such a build names no

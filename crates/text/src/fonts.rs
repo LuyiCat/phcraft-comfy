@@ -397,27 +397,52 @@ impl FontDb {
     pub fn localized_family_names(&mut self) -> HashMap<String, String> {
         let mut out = HashMap::new();
         for family in self.families() {
-            let Some(info) = self.fcx.collection.family_by_name(&family) else {
-                continue;
-            };
-            let Some(face) = info.fonts().first() else {
-                continue;
-            };
-            let Some(blob) = face.load(Some(&mut self.fcx.source_cache)) else {
-                continue;
-            };
-            let Ok(font) = skrifa::FontRef::from_index(blob.as_ref(), face.index()) else {
-                continue;
-            };
-            let names =
-                |id| -> Vec<(String, Option<String>)> { font.localized_strings(id).map(|s| (s.chars().collect(), s.language().map(str::to_string))).collect() };
-            let typographic = names(StringId::TYPOGRAPHIC_FAMILY_NAME);
-            let names = if typographic.is_empty() { names(StringId::FAMILY_NAME) } else { typographic };
+            let Some(names) = self.family_name_records(&family) else { continue };
             if let Some(local) = localized_name(&family, &names) {
                 out.insert(family, local);
             }
         }
         out
+    }
+
+    /// Each listed family's name in the interface language `ui` (a language tag such as `zh-hans`):
+    /// what an embedded font's manifest declares for that language ([`crate::CraftFont::names`]),
+    /// else the record its own `name` table carries for it ([`language_matches`]). Families without
+    /// one are absent. A display label for font menus; documents keep the English family.
+    pub fn native_family_names(&mut self, ui: &str) -> HashMap<String, String> {
+        let mut out: HashMap<String, String> = HashMap::new();
+        for family in self.families() {
+            let Some(names) = self.family_name_records(&family) else { continue };
+            let native = names
+                .iter()
+                .find(|(name, lang)| lang.as_deref().is_some_and(|l| language_matches(ui, l)) && !name.trim().is_empty() && name != &family)
+                .map(|(name, _)| name.clone());
+            if let Some(native) = native {
+                out.insert(family, native);
+            }
+        }
+        for font in crate::CRAFT_FONTS {
+            if let Some((_, name)) = font.names.iter().find(|(lang, _)| language_matches(ui, lang))
+                && self.has_family(font.family)
+            {
+                out.insert(font.family.to_string(), name.to_string());
+            }
+        }
+        out
+    }
+
+    /// The name records a family's menu name comes from: its typographic family (name ID 16), else
+    /// its family name (ID 1), each with its language tag. `None` for an unknown family or one
+    /// whose first face can't be read.
+    fn family_name_records(&mut self, family: &str) -> Option<Vec<(String, Option<String>)>> {
+        let info = self.fcx.collection.family_by_name(family)?;
+        let face = info.fonts().first()?;
+        let blob = face.load(Some(&mut self.fcx.source_cache))?;
+        let font = skrifa::FontRef::from_index(blob.as_ref(), face.index()).ok()?;
+        let names =
+            |id| -> Vec<(String, Option<String>)> { font.localized_strings(id).map(|s| (s.chars().collect(), s.language().map(str::to_string))).collect() };
+        let typographic = names(StringId::TYPOGRAPHIC_FAMILY_NAME);
+        Some(if typographic.is_empty() { names(StringId::FAMILY_NAME) } else { typographic })
     }
 
     pub fn has_family(&mut self, name: &str) -> bool {
@@ -1017,6 +1042,28 @@ pub fn localized_name(english: &str, names: &[(String, Option<String>)]) -> Opti
 
 pub fn is_hidden_family(name: &str) -> bool {
     name.starts_with('.')
+}
+
+/// Whether a font name record's language (`lang`, e.g. `zh-CN`) names the same language as the
+/// interface tag `ui` (e.g. `zh-Hans`), in the same script where the two tell it apart: a
+/// Simplified Chinese interface takes a font's `zh-CN` or `zh` name, not its `zh-TW` one.
+pub fn language_matches(ui: &str, lang: &str) -> bool {
+    let parts = |s: &str| -> Vec<String> { s.split(['-', '_']).map(|p| p.trim().to_ascii_lowercase()).filter(|p| !p.is_empty()).collect() };
+    let (ui, lang) = (parts(ui), parts(lang));
+    if ui.first() != lang.first() {
+        return false;
+    }
+    let script = |p: &[String]| {
+        p.iter().find_map(|p| match p.as_str() {
+            "hans" | "cn" | "sg" | "my" => Some("hans"),
+            "hant" | "tw" | "hk" | "mo" => Some("hant"),
+            _ => None,
+        })
+    };
+    match (script(&ui), script(&lang)) {
+        (Some(a), Some(b)) => a == b,
+        _ => true,
+    }
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]

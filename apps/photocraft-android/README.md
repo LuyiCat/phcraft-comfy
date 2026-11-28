@@ -115,6 +115,8 @@ not in git — the first build that needs it runs `scripts/photocomfy-fonts.sh` 
 downloads into the ignored `photocomfy-fonts/`, checked against `scripts/photocomfy-fonts.lock`)
 and sets `PHOTOCOMFY_FONTS_DIR`. The licence texts of every embedded font ship inside the APK as
 `assets/fonts-licences/`.
+Under a Chinese interface the font menu heads its list with a 中文字体 group that names these
+families in Chinese and shows a Chinese sample beside each.
 
 ## Drawing input
 

@@ -3300,3 +3300,8 @@ smartSvg	AI/PDF/EPS contents will be edited as SVG. Saving replaces the embedded
 	Select {layer}	选择{layer}
 	Painting needs the Apple Pencil	绘画、填充和选区需要使用 Apple Pencil
 	Drawing, filling and selecting are not available on this device	此设备不支持绘画、填充和选区
+
+# The font menu's group of the interface's own script (type_tool/fonts.rs).
+	Chinese fonts	中文字体
+	Japanese fonts	日文字体
+	Korean fonts	韩文字体

@@ -157,7 +157,6 @@ fn the_pencil_still_selects_and_fills() {
     let base = past_len(&h);
     contact_down(&mut h, at, Some(0.4));
     contact_up(&mut h, at, Some(0.4));
-    eprintln!("DBG rest status={:?} drag={:?}", h.state().0.ui.status, h.state().0.drag.is_some());
     assert_eq!(past_len(&h), base + 1, "the pencil's tap filled");
 }
 

@@ -374,7 +374,8 @@ pub(crate) fn commit_shortcut(app: &mut PhotocraftApp, ctx: &egui::Context) -> b
     if let Some(edit) = font_edit.filter(|e| !e.accepted && !e.text.trim().is_empty() && !e.query.is_empty()) {
         let families = families();
         let labels: Option<Arc<HashMap<String, String>>> = ctx.data(|d| d.get_temp(font_labels_id()));
-        let (rows, _) = font_menu_rows(&families, labels.as_deref(), &edit.query, &edit.recents);
+        // A query lists matches only: neither the recent nor the script group is drawn.
+        let (rows, _, _) = font_menu_rows(&families, labels.as_deref(), None, &[], &edit.query, &edit.recents);
         let selected =
             edit.row.filter(|&i| rows.get(i).is_some_and(|(f, _)| **f == edit.current)).or_else(|| rows.iter().position(|(f, _)| **f == edit.current));
         let family = accept_row(&rows, &edit.text, selected).and_then(|i| rows.get(i)).map(|(f, _)| (*f).clone());

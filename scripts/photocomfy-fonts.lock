@@ -4,10 +4,41 @@
 #
 #   font | family | style | file | scripts | licence | licence file | sha256 | source | download URLs
 #   text | file | sha256 | download URLs
+#   name | family | language | display name
 #
 # Fields 2-9 of a font line are its craft-fonts manifest row; the fonts are byte-identical to their sources.
+# A name line gives a family its name in one language (a BCP 47 tag such as zh-Hans) for font menus whose
+# interface is in that language; the manifest row gets them as a ninth field, "zh-Hans=思源黑体;zh-Hant=思源黑體".
+# Only families whose own `name` table has no such record need one (docs/photocomfy-fonts.md).
 # The order of the font lines is the manifest order: the UI's script fallback uses the first face of a
 # script that covers a character, so the Noto families stay ahead of the display faces.
+
+# Names for font menus in Simplified and Traditional Chinese interfaces.
+name | Noto Sans SC | zh-Hans | 思源黑体
+name | Noto Sans SC | zh-Hant | 思源黑體
+name | Noto Serif SC | zh-Hans | 思源宋体
+name | Noto Serif SC | zh-Hant | 思源宋體
+name | Noto Sans TC | zh-Hans | 思源黑体 繁体
+name | Noto Sans TC | zh-Hant | 思源黑體
+name | Noto Serif TC | zh-Hans | 思源宋体 繁体
+name | Noto Serif TC | zh-Hant | 思源宋體
+name | Zhuque Fangsong | zh-Hans | 朱雀仿宋
+name | Zhuque Fangsong | zh-Hant | 朱雀仿宋
+name | Ma Shan Zheng | zh-Hans | 马善政毛笔楷书
+name | Ma Shan Zheng | zh-Hant | 馬善政毛筆楷書
+name | ZCOOL KuaiLe | zh-Hans | 站酷快乐体
+name | ZCOOL KuaiLe | zh-Hant | 站酷快樂體
+name | Smiley Sans | zh-Hant | 得意黑
+name | LXGW WenKai Lite | zh-Hant | 霞鶩文楷 輕便版
+name | LXGW Neo XiHei Plus | zh-Hant | 霞鶩新晰黑＋
+name | DouyinSans | zh-Hant | 抖音美好體
+name | Yozai | zh-Hant | 悠哉字體
+name | ZCOOL QingKe HuangYou | zh-Hant | 站酷慶科黃油體
+name | ZCOOL XiaoWei | zh-Hant | 站酷小薇體
+name | Long Cang | zh-Hant | 有字庫龍藏體
+name | Zhi Mang Xing | zh-Hant | 鍾齊志莽行書
+name | Liu Jian Mao Cao | zh-Hant | 鍾齊流江毛筆草體
+name | LXGW Marker Gothic | zh-Hant | 霞鶩漫黑
 
 font | Noto Sans SC | Regular | fonts/noto-sans-sc/NotoSansSC-VF.ttf | Hans,Latn | OFL-1.1 | fonts/noto-sans-sc/OFL.txt | a3041811a78c361b1de50f953c805e0244951c21c5bd412f7232ef0d899af0da | https://github.com/google/fonts/tree/6ebe737e44fd64ee736bbc6feed6136a6dbfd222/ofl/notosanssc | https://raw.githubusercontent.com/google/fonts/6ebe737e44fd64ee736bbc6feed6136a6dbfd222/ofl/notosanssc/NotoSansSC%5Bwght%5D.ttf ;; https://api.github.com/repos/google/fonts/contents/ofl/notosanssc/NotoSansSC%5Bwght%5D.ttf?ref=6ebe737e44fd64ee736bbc6feed6136a6dbfd222
 font | Noto Serif SC | Regular | fonts/noto-serif-sc/NotoSerifSC-VF.ttf | Hans,Latn | OFL-1.1 | fonts/noto-serif-sc/OFL.txt | 050080d9255a86808f2945bffac582b31ef32bc36411ce29563b4961670c66f9 | https://github.com/google/fonts/tree/6ebe737e44fd64ee736bbc6feed6136a6dbfd222/ofl/notoserifsc | https://raw.githubusercontent.com/google/fonts/6ebe737e44fd64ee736bbc6feed6136a6dbfd222/ofl/notoserifsc/NotoSerifSC%5Bwght%5D.ttf ;; https://api.github.com/repos/google/fonts/contents/ofl/notoserifsc/NotoSerifSC%5Bwght%5D.ttf?ref=6ebe737e44fd64ee736bbc6feed6136a6dbfd222

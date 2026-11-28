@@ -972,7 +972,7 @@ fn font_menu_rows_search_both_names_and_sort_by_label() {
     let labels: HashMap<String, String> =
         [("MS Gothic", "ＭＳ ゴシック"), ("Microsoft YaHei", "微软雅黑")].iter().map(|(a, b)| (a.to_string(), b.to_string())).collect();
     let rows = |labels: Option<&HashMap<String, String>>, q: &str| -> Vec<(String, String)> {
-        super::font_menu_rows(&families, labels, q, &[]).0.into_iter().map(|(f, l)| (f.clone(), l.to_string())).collect()
+        super::font_menu_rows(&families, labels, None, &[], q, &[]).0.into_iter().map(|(f, l)| (f.clone(), l.to_string())).collect()
     };
     let english = rows(None, "");
     assert!(english.iter().all(|(f, l)| f == l));
@@ -991,7 +991,7 @@ fn recent_fonts_head_the_menu_and_keep_their_place() {
     let families: Vec<String> = ["Arial", "Baskerville", "Courier", "Zeta Sans"].iter().map(|s| s.to_string()).collect();
     let recents: Vec<String> = vec!["Zeta Sans".into(), "Courier".into(), "Gone".into()];
     let rows = |q: &str| -> (Vec<String>, usize) {
-        let (rows, n) = super::font_menu_rows(&families, None, q, &recents);
+        let (rows, n, _) = super::font_menu_rows(&families, None, None, &[], q, &recents);
         (rows.into_iter().map(|(f, _)| f.clone()).collect(), n)
     };
     assert_eq!(
@@ -1000,6 +1000,112 @@ fn recent_fonts_head_the_menu_and_keep_their_place() {
         "a recent group (no uninstalled family), then the whole alphabetical list"
     );
     assert_eq!(rows("a"), (vec!["Arial".into(), "Baskerville".into(), "Zeta Sans".into()], 0), "a query lists each match once");
+}
+
+/// Under a Chinese, Japanese or Korean interface the fonts of that script follow the recent ones
+/// in the font menu in their group's order, named in the interface's language where it has a name
+/// for them, once each besides their alphabetical place; a query lists none of it.
+#[test]
+fn the_interfaces_script_fonts_follow_the_recent_ones_named_in_the_language() {
+    use std::collections::HashMap;
+    let families: Vec<String> = ["Arial", "LXGW WenKai Lite", "Ma Shan Zheng", "Noto Sans SC", "Smiley Sans"].iter().map(|s| s.to_string()).collect();
+    let native: HashMap<String, String> =
+        [("Noto Sans SC", "思源黑体"), ("Ma Shan Zheng", "马善政毛笔楷书"), ("LXGW WenKai Lite", "霞鹜文楷 轻便版"), ("Smiley Sans", "得意黑")]
+            .iter()
+            .map(|(a, b)| (a.to_string(), b.to_string()))
+            .collect();
+    let script: Vec<String> = ["LXGW WenKai Lite", "Ma Shan Zheng", "Noto Sans SC", "Smiley Sans"].iter().map(|s| s.to_string()).collect();
+    let recents: Vec<String> = vec!["Smiley Sans".into()];
+    let rows = |script: &[String], q: &str| -> (Vec<(String, String)>, usize, usize) {
+        let (rows, n, g) = super::font_menu_rows(&families, None, Some(&native), script, q, &recents);
+        (rows.into_iter().map(|(f, l)| (f.clone(), l.to_string())).collect(), n, g)
+    };
+    let (listed, n_recent, n_script) = rows(&script, "");
+    assert_eq!((n_recent, n_script), (1, 3));
+    assert_eq!(
+        listed[..4].iter().map(|(_, l)| l.as_str()).collect::<Vec<_>>(),
+        ["得意黑", "霞鹜文楷 轻便版", "马善政毛笔楷书", "思源黑体"],
+        "the recent one, then the rest of the script group in its order, by their own names"
+    );
+    assert_eq!(
+        listed[4..].iter().map(|(f, _)| f.as_str()).collect::<Vec<_>>(),
+        ["Arial", "LXGW WenKai Lite", "Ma Shan Zheng", "Noto Sans SC", "Smiley Sans"],
+        "then the whole alphabetical list"
+    );
+    // A query lists each match once, under the menu's usual name, with neither group.
+    let (found, n_recent, n_script) = rows(&script, "noto");
+    assert_eq!((found, n_recent, n_script), (vec![("Noto Sans SC".to_string(), "Noto Sans SC".to_string())], 0, 0));
+    // A family outside the list is not grouped; with no group at all the list is the old one.
+    let (listed, n_recent, n_script) = rows(&["Gone".to_string()], "");
+    assert_eq!((listed.len(), n_recent, n_script), (6, 1, 0));
+}
+
+/// Which families the menu groups, and the names it gives them, follow the interface's script.
+#[test]
+fn the_script_group_follows_the_interface_language() {
+    let _english = crate::i18n::language_scope(crate::i18n::Lang::EN);
+    assert!(crate::type_tool::fonts::script_families().is_none(), "an English interface has no such group");
+    let zh = crate::i18n::Lang::from_code("zh-hans").expect("Simplified Chinese");
+    let _zh = crate::i18n::language_scope(zh);
+    let group = crate::type_tool::fonts::script_families().expect("a Chinese interface groups its fonts");
+    assert!(!group.iter().any(|f| f == "Inter") && !group.iter().any(|f| f == "Noto Sans Arabic"), "a Latin or an Arabic font stays out");
+    let pack = photocraft_text::CRAFT_FONTS.iter().any(|f| f.family == "Noto Sans SC");
+    if pack {
+        assert!(group.iter().any(|f| f == "Noto Sans SC") && group.iter().any(|f| f == "Smiley Sans"), "the pack's, by the scripts they declare");
+        assert!(!group.iter().any(|f| f == "BIZ UDPGothic"), "the Japanese UI font is not a Chinese font");
+    }
+    let native = crate::type_tool::fonts::native_families();
+    if pack {
+        assert_eq!(native.get("Smiley Sans").map(String::as_str), Some("得意黑"));
+        assert_eq!(native.get("Noto Sans SC").map(String::as_str), Some("思源黑体"));
+    }
+    assert!(native.get("Inter").is_none());
+}
+
+/// The menu itself, under a Chinese interface: the group's title, its rows under their Chinese
+/// names, and each family again in its alphabetical place.
+#[test]
+fn a_chinese_interface_heads_the_font_menu_with_its_own_fonts() {
+    if !photocraft_text::CRAFT_FONTS.iter().any(|f| f.names.iter().any(|(lang, _)| *lang == "zh-Hans")) {
+        eprintln!("skipped: built without the PhotoComfy font pack (set PHOTOCOMFY_FONTS_DIR)");
+        return;
+    }
+    let _zh = crate::i18n::language_scope(crate::i18n::Lang::from_code("zh-hans").expect("Simplified Chinese"));
+    let mut families = crate::type_tool::fonts::script_families().expect("a Chinese interface groups its fonts").to_vec();
+    families.push("Inter".into());
+    let mut h = Harness::builder().with_size(vec2(600.0, 900.0)).with_max_steps(SETTLE_STEPS).build_ui_state(
+        |ui, current: &mut String| {
+            font_picker_in(ui, current, 170.0, &families, FontPreview::Medium, &[]);
+        },
+        "Inter".to_string(),
+    );
+    // The app's fonts, so the Chinese labels have glyphs.
+    crate::PhotocraftApp::setup_context(&h.ctx, crate::theme::ThemeKind::ALL[0]);
+    h.run();
+    h.get_by_role(Role::TextInput).click();
+    h.run();
+    assert!(h.query_by_label("中文字体").is_some(), "the group's title");
+    assert!(h.query_by_label("思源黑体").is_some(), "Noto Sans SC under its Chinese name");
+    assert!(h.query_by_label("Noto Sans SC").is_some(), "and in its alphabetical place");
+    assert!(h.query_by_label("Inter").is_some(), "a Latin font stays in the list");
+}
+
+/// A finger's tap on a row picks its family: the contact and the press, the lift, then the
+/// pointer leaving.
+#[test]
+fn a_fingers_tap_on_a_row_picks_the_family() {
+    let mut h = harness();
+    open(&mut h);
+    let row = h.get_by_label("Family 02").rect().center();
+    let touch = |phase: egui::TouchPhase| egui::Event::Touch { device_id: egui::TouchDeviceId(0), id: egui::TouchId(1), phase, pos: row, force: None };
+    let press = |pressed: bool| egui::Event::PointerButton { pos: row, button: egui::PointerButton::Primary, pressed, modifiers: Modifiers::NONE };
+    h.input_mut().events = vec![touch(egui::TouchPhase::Start), press(true)];
+    h.step();
+    h.input_mut().events = vec![touch(egui::TouchPhase::End), press(false)];
+    h.step();
+    h.input_mut().events = vec![egui::Event::PointerGone];
+    h.run();
+    assert_eq!(h.state().current, "Family 02", "the tapped family is applied");
 }
 
 /// The menu itself draws the recent group first, and the recent families again in their place.

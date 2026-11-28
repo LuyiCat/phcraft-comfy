@@ -17,6 +17,10 @@ pub struct CraftFont {
     /// ISO 15924 scripts the font is for, e.g. `"Jpan"`.
     pub scripts: &'static [&'static str],
     pub bytes: &'static [u8],
+    /// The family's name in other languages for font menus, `(language tag, name)`: the pack's
+    /// manifest gives them to families whose own `name` table has none for that language
+    /// (`("zh-Hans", "思源黑体")` for Noto Sans SC). Empty for the craft fonts.
+    pub names: &'static [(&'static str, &'static str)],
 }
 
 include!(concat!(env!("OUT_DIR"), "/craft_fonts.rs"));

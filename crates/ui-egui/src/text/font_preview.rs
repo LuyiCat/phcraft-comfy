@@ -8,13 +8,15 @@ use photocraft_color::{ColorMode, PixelFormat, SampleType};
 use photocraft_doc::TextLayer;
 use photocraft_engine::prefs::FontPreview;
 use photocraft_geom::Affine;
+use photocraft_text::cjk::CjkScript;
 
 const SAMPLE: &str = "AaBbCc";
 /// Alef, lam, meem and ain: a face lacking any of them is not treated as an Arabic face.
 const ARABIC_CORE: [char; 4] = ['\u{627}', '\u{644}', '\u{645}', '\u{639}'];
 /// Short, recognisable, and joins letters, so it shows the face's shaping.
 const ARABIC_SAMPLE: &str = "أبجد هوز";
-/// The Latin and Arabic sample widths and the sample height at the menu's medium (18 pt).
+/// The Latin and second (Arabic, or the interface's own CJK) sample widths and the sample height
+/// at the menu's medium (18 pt).
 const WIDTH: f32 = 100.0;
 const ARABIC_WIDTH: f32 = 72.0;
 const GAP: f32 = 6.0;
@@ -50,11 +52,12 @@ pub(crate) fn sample(preview: FontPreview) -> Option<(f32, [f32; 2])> {
 }
 
 /// Family, display scale, the shared font database's generation (so a family installed or
-/// fetched (served fonts) after its first miss gets a sample once it is available) and the point
-/// size. Not the served catalog's generation: a listed family has no sample until its fonts are
-/// registered, which moves the database's generation, and keying on the catalog re-rendered
-/// every sample whenever it changed.
-type Key = (String, u32, u64, u32);
+/// fetched (served fonts) after its first miss gets a sample once it is available), the point
+/// size and the interface's own sample (which changes with the interface language). Not the
+/// served catalog's generation: a listed family has no sample until its fonts are registered,
+/// which moves the database's generation, and keying on the catalog re-rendered every sample
+/// whenever it changed.
+type Key = (String, u32, u64, u32, Option<&'static str>);
 #[derive(Clone)]
 struct Samples {
     latin: TextureHandle,
@@ -68,13 +71,27 @@ struct SampleImages {
     arabic: Option<ColorImage>,
 }
 
-/// The Latin sample text, and the Arabic one for a face that has both scripts. `chars` is the
-/// face's ascending charmap. Arabic-only and symbol faces show their own glyphs instead of the
-/// Latin sample and get no second sample.
-fn sample_texts(chars: &[char]) -> (String, Option<&'static str>) {
+/// The interface's own script's sample, in that script, under a Japanese, Korean or Chinese
+/// interface; `None` under any other, where a face's second sample is Arabic or nothing.
+fn ui_sample() -> Option<&'static str> {
+    Some(match photocraft_text::cjk::locale_script(Some(crate::i18n::current().code()))? {
+        CjkScript::SimplifiedChinese => "中文字体",
+        CjkScript::TraditionalChinese => "中文字體",
+        CjkScript::Japanese => "日本語",
+        CjkScript::Korean => "한글",
+    })
+}
+
+/// The Latin sample text, and the second one for a face that has both scripts: `ui` when the face
+/// can show it, else Arabic. `chars` is the face's ascending charmap. Arabic-only and symbol faces
+/// show their own glyphs instead of the Latin sample and get no second sample.
+fn sample_texts(chars: &[char], ui: Option<&'static str>) -> (String, Option<&'static str>) {
     let has = |c: char| chars.binary_search(&c).is_ok();
     if !SAMPLE.chars().all(has) {
         return (chars.iter().copied().filter(|c| !c.is_whitespace()).take(6).collect(), None);
+    }
+    if let Some(ui) = ui.filter(|ui| ui.chars().all(has)) {
+        return (SAMPLE.into(), Some(ui));
     }
     let arabic = ARABIC_CORE.into_iter().chain(ARABIC_SAMPLE.chars().filter(|c| !c.is_whitespace())).all(has);
     (SAMPLE.into(), arabic.then_some(ARABIC_SAMPLE))
@@ -106,7 +123,7 @@ fn images(engine: &mut photocraft_text::TextEngine, family: &str, scale: u32, si
     if !engine.fonts.has_family(family) {
         return None;
     }
-    let (latin, arabic) = sample_texts(&engine.fonts.charmap(family, 400, false));
+    let (latin, arabic) = sample_texts(&engine.fonts.charmap(family, 400, false), ui_sample());
     let latin = render(engine, family, &latin, scaled(WIDTH, size), scale, size)?;
     let arabic = arabic.and_then(|text| render(engine, family, text, scaled(ARABIC_WIDTH, size), scale, size));
     Some(SampleImages { latin, arabic })
@@ -114,7 +131,7 @@ fn images(engine: &mut photocraft_text::TextEngine, family: &str, scale: u32, si
 
 fn key(ctx: &egui::Context, family: &str, size: f32) -> Key {
     let scale = ctx.pixels_per_point().ceil().clamp(1.0, 4.0) as u32;
-    (family.to_owned(), scale, photocraft_text::fonts::shared_generation(), size as u32)
+    (family.to_owned(), scale, photocraft_text::fonts::shared_generation(), size as u32, ui_sample())
 }
 
 /// Width a row reserves for its samples: wider once a painted row showed the family covers
@@ -265,24 +282,45 @@ mod tests {
     fn only_faces_with_both_scripts_get_the_arabic_sample() {
         let latin = format!("{SAMPLE} ");
         let arabic = format!("{ARABIC_SAMPLE}{}", ARABIC_CORE.iter().collect::<String>());
-        let (text, second) = sample_texts(&charmap(&format!("{latin}{arabic}")));
+        let (text, second) = sample_texts(&charmap(&format!("{latin}{arabic}")), None);
         assert_eq!((text.as_str(), second), (SAMPLE, Some(ARABIC_SAMPLE)));
-        assert_eq!(sample_texts(&charmap(&latin)), (SAMPLE.into(), None));
-        let (own_glyphs, none) = sample_texts(&charmap(&arabic));
+        assert_eq!(sample_texts(&charmap(&latin), None), (SAMPLE.into(), None));
+        let (own_glyphs, none) = sample_texts(&charmap(&arabic), None);
         assert_eq!((own_glyphs.chars().count(), none), (6, None));
         assert!(own_glyphs.chars().all(|c| arabic.contains(c)));
-        assert_eq!(sample_texts(&[]), (String::new(), None));
+        assert_eq!(sample_texts(&[], None), (String::new(), None));
         for missing in ARABIC_CORE.into_iter().chain(ARABIC_SAMPLE.chars().filter(|c| !c.is_whitespace())) {
             let partial: String = format!("{latin}{arabic}").chars().filter(|&c| c != missing).collect();
-            assert_eq!(sample_texts(&charmap(&partial)).1, None, "without U+{:04X}", missing as u32);
+            assert_eq!(sample_texts(&charmap(&partial), None).1, None, "without U+{:04X}", missing as u32);
         }
+    }
+
+    /// Under a Chinese interface a font that can show Chinese gets "中文字体" as its second sample,
+    /// where a Latin-script interface would show Arabic or nothing.
+    #[test]
+    fn a_cjk_interface_shows_its_own_sample_next_to_the_latin_one() {
+        let both = format!("{SAMPLE} 中文字体");
+        assert_eq!(sample_texts(&charmap(&both), Some("中文字体")), (SAMPLE.into(), Some("中文字体")));
+        let (_, none) = sample_texts(&charmap(&format!("{SAMPLE} 中文")), Some("中文字体"));
+        assert_eq!(none, None, "a face that lacks a character of the sample shows none of it");
+        let Some(font) = photocraft_text::CRAFT_FONTS.iter().find(|f| f.scripts.contains(&"Hans")) else {
+            eprintln!("skipped: built without the PhotoComfy font pack (set PHOTOCOMFY_FONTS_DIR)");
+            return;
+        };
+        let _zh = crate::i18n::language_scope(crate::i18n::Lang::from_code("zh-hans").expect("Simplified Chinese"));
+        let mut engine = photocraft_text::TextEngine::new();
+        let cjk = images(&mut engine, font.family, 1, MEDIUM).expect("an embedded font").arabic.expect("its Chinese sample");
+        assert_eq!(cjk.size, [ARABIC_WIDTH as usize, HEIGHT as usize]);
+        assert!(cjk.pixels.iter().any(|p| p.a() > 0), "the sample has ink");
+        assert!(images(&mut engine, "Inter", 1, MEDIUM).expect("bundled").arabic.is_none(), "a Latin font keeps one sample");
     }
 
     #[test]
     fn a_system_arabic_face_renders_both_samples() {
         let mut engine = photocraft_text::TextEngine::new();
         engine.fonts.load_system_fonts();
-        let candidates: Vec<String> = engine.fonts.families().into_iter().filter(|f| sample_texts(&engine.fonts.charmap(f, 400, false)).1.is_some()).collect();
+        let candidates: Vec<String> =
+            engine.fonts.families().into_iter().filter(|f| sample_texts(&engine.fonts.charmap(f, 400, false), None).1.is_some()).collect();
         // A face can map the Arabic characters to blank glyphs (#5259): `render` then rightly gives
         // no sample, so every candidate is rendered and the first one with an Arabic sample is checked.
         let mut rendered = None;

@@ -191,7 +191,7 @@ fn localized_family_names_map_english_families_to_native_names() {
 
 /// A craft-fonts manifest entry for `bytes`, as `build.rs` writes one per manifest line.
 fn craft(family: &'static str, scripts: &'static [&'static str], bytes: Vec<u8>) -> crate::CraftFont {
-    crate::CraftFont { family, style: "Regular", scripts, bytes: bytes.leak() }
+    crate::CraftFont { family, style: "Regular", scripts, bytes: bytes.leak(), names: &[] }
 }
 
 /// A TrueType collection of single-face fonts.
@@ -467,4 +467,36 @@ fn postscript_name_of_a_named_instance_lays_out_at_that_instance() {
     let explicit = width(CharStyle { variations: axes, ..base });
     assert!(explicit < family * 0.8, "wdth 75 is narrower: {explicit} vs {family}");
     assert!((instance - explicit).abs() < 0.5, "instance: {instance} px, its axes: {explicit} px, default instance: {family} px");
+}
+
+#[test]
+fn a_native_name_follows_the_interface_script() {
+    assert!(language_matches("zh-hans", "zh-CN") && language_matches("zh-hans", "zh") && language_matches("zh-Hans-CN", "zh_Hans"));
+    assert!(!language_matches("zh-hans", "zh-TW") && !language_matches("zh-hant", "zh-CN"));
+    assert!(language_matches("zh-hant", "zh-TW") && language_matches("zh-hant", "zh-HK"));
+    assert!(language_matches("ja", "ja-JP") && !language_matches("ja", "zh-CN") && !language_matches("en", "ja"));
+    // Where neither tag names a script they agree on the language alone.
+    assert!(language_matches("zh", "zh-TW") && language_matches("pt-br", "pt"));
+}
+
+/// The PhotoComfy font pack's names for a Chinese interface: from its manifest where the font's
+/// own `name` table has none in that language, else from that table.
+#[test]
+fn native_family_names_come_from_the_manifest_and_the_name_table() {
+    let Some(noto) = crate::CRAFT_FONTS.iter().find(|f| f.family == "Noto Sans SC") else {
+        eprintln!("skipped: built without the PhotoComfy font pack (set PHOTOCOMFY_FONTS_DIR)");
+        return;
+    };
+    assert!(noto.names.contains(&("zh-Hans", "思源黑体")), "{:?}", noto.names);
+    let mut db = FontDb::new();
+    let hans = db.native_family_names("zh-hans");
+    assert_eq!(hans.get("Noto Sans SC").map(String::as_str), Some("思源黑体"));
+    assert_eq!(hans.get("Zhuque Fangsong").map(String::as_str), Some("朱雀仿宋"), "the manifest's name wins over the table's");
+    assert_eq!(hans.get("Smiley Sans").map(String::as_str), Some("得意黑"), "from the font's own name table");
+    assert_eq!(hans.get("LXGW WenKai Lite").map(String::as_str), Some("霞鹜文楷 轻便版"), "the Simplified record, not the Traditional one");
+    let hant = db.native_family_names("zh-hant");
+    assert_eq!(hant.get("Noto Sans TC").map(String::as_str), Some("思源黑體"));
+    assert_eq!(hant.get("LXGW WenKai Lite").map(String::as_str), Some("霞鶩文楷 輕便版"));
+    assert!(!hans.contains_key("Inter"), "a Latin font has no Chinese name");
+    assert!(!db.native_family_names("en").contains_key("Smiley Sans"), "an English interface keeps the family names");
 }

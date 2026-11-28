@@ -706,7 +706,7 @@ fn ttc_craft_face() -> &'static CraftFont {
     static FACE: std::sync::OnceLock<CraftFont> = std::sync::OnceLock::new();
     FACE.get_or_init(|| {
         let bytes: &'static [u8] = Box::leak(two_face_ttc(&synthetic_font(&[(0x0E01, 0x0E5B)]), &synthetic_font(&[(0x9F8D, 0x9F8D)])).into_boxed_slice());
-        CraftFont { family: "Synthetic Collection", style: "Regular", scripts: &["Hans"], bytes }
+        CraftFont { family: "Synthetic Collection", style: "Regular", scripts: &["Hans"], bytes, names: &[] }
     })
 }
 
@@ -724,7 +724,7 @@ fn craft_face_coverage_matches_the_face_craft_insert_installs() {
     assert!(craft_face_installs_coverage(face, 'ก'), "face 0 maps Thai");
 }
 
-static EMPTY_CRAFT_FACE: CraftFont = CraftFont { family: "Empty", style: "Regular", scripts: &["Zsym"], bytes: &[] };
+static EMPTY_CRAFT_FACE: CraftFont = CraftFont { family: "Empty", style: "Regular", scripts: &["Zsym"], bytes: &[], names: &[] };
 
 fn only_empty_craft_face(_: &'static str) -> Vec<&'static CraftFont> {
     vec![&EMPTY_CRAFT_FACE]
